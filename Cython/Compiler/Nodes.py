@@ -3823,7 +3823,7 @@ class PassStatNode(StatNode):
 class BreakStatNode(StatNode):
 
     child_attrs = []
-    is_terminator = 1
+    is_terminator = True
 
     def analyse_expressions(self, env):
         pass
