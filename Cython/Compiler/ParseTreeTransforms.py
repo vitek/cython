@@ -150,6 +150,23 @@ class RemoveUnreachableCode(CythonTransform):
                 break
         return node
 
+    def visit_IfClauseNode(self, node):
+        self.visitchildren(node)
+        if node.body.is_terminator:
+            node.is_terminator = True
+        return node
+
+    def visit_IfStatNode(self, node):
+        self.visitchildren(node)
+        if node.else_clause and not node.else_clause.is_terminator:
+            return node
+        for clause in node.if_clauses:
+            if not clause.is_terminator:
+                return node
+        node.is_terminator = True
+        return node
+
+
 class PostParseError(CompileError): pass
 
 # error strings checked by unit tests, so define them
