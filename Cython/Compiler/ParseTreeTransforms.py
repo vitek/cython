@@ -134,6 +134,20 @@ class NormalizeTree(CythonTransform):
         return node
 
 
+class RemoveUnreachableCode(CythonTransform):
+    def visit_Node(self, node):
+        self.visitchildren(node)
+        return node
+
+    def visit_StatListNode(self, node):
+        self.visitchildren(node)
+        for idx, stat in enumerate(node.stats, 1):
+            if stat.is_terminator and idx < len(node.stats):
+                node.stats = node.stats[:idx]
+                warning(stat.pos, "Unreachable code", 2)
+                break
+        return node
+
 class PostParseError(CompileError): pass
 
 # error strings checked by unit tests, so define them
