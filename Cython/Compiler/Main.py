@@ -137,6 +137,7 @@ class Context(object):
             _specific_post_parse,
             InterpretCompilerDirectives(self, self.compiler_directives),
             _align_function_definitions,
+            RemoveUnreachableCode(self),
             MarkClosureVisitor(self),
             ConstantFolding(),
             FlattenInListTransform(),
@@ -152,7 +153,6 @@ class Context(object):
             IntroduceBufferAuxiliaryVars(self),
             _check_c_declarations,
             AnalyseExpressionsTransform(self),
-            RemoveUnreachableCode(self),
             CreateClosureClasses(self),  ## After all lookups and type inference
             ExpandInplaceOperators(self),
             OptimizeBuiltinCalls(self),  ## Necessary?
