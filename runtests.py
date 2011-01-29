@@ -46,7 +46,7 @@ from distutils.core import Extension
 from distutils.command.build_ext import build_ext as _build_ext
 distutils_distro = Distribution()
 
-TEST_DIRS = ['compile', 'errors', 'run', 'wrappers', 'pyregr', 'build']
+TEST_DIRS = ['compile', 'errors', 'warnings', 'run', 'wrappers', 'pyregr', 'build']
 TEST_RUN_DIRS = ['run', 'wrappers', 'pyregr']
 
 # Lists external modules, and a matcher matching tests
@@ -187,7 +187,15 @@ class TestBuilder(object):
         if not os.path.exists(workdir):
             os.makedirs(workdir)
 
-        expect_errors = (context == 'errors')
+        expect_errors = False
+        warning_errors = False
+
+        if context == 'errors':
+            expect_errors = True
+        elif context == 'warnings':
+            expect_errors = True
+            warning_errors = True
+
         suite = unittest.TestSuite()
         filenames = os.listdir(path)
         filenames.sort()
@@ -219,15 +227,16 @@ class TestBuilder(object):
                     test_class = CythonRunTestCase
             else:
                 test_class = CythonCompileTestCase
-            for test in self.build_tests(test_class, path, workdir,
-                                         module, expect_errors):
+            for test in self.build_tests(test_class, path, workdir, module,
+                                         expect_errors, warning_errors):
                 suite.addTest(test)
             if context == 'run' and filename.endswith('.py'):
                 # additionally test file in real Python
                 suite.addTest(PureDoctestTestCase(module, os.path.join(path, filename)))
         return suite
 
-    def build_tests(self, test_class, path, workdir, module, expect_errors):
+    def build_tests(self, test_class, path, workdir, module,
+                    expect_errors, warning_errors=False):
         if expect_errors:
             if 'cpp' in module and 'cpp' in self.languages:
                 languages = ['cpp']
@@ -239,18 +248,19 @@ class TestBuilder(object):
             languages = list(languages)
             languages.remove('c')
         tests = [ self.build_test(test_class, path, workdir, module,
-                                  language, expect_errors)
+                                  language, expect_errors, warning_errors)
                   for language in languages ]
         return tests
 
     def build_test(self, test_class, path, workdir, module,
-                   language, expect_errors):
+                   language, expect_errors, warning_errors=False):
         workdir = os.path.join(workdir, language)
         if not os.path.exists(workdir):
             os.makedirs(workdir)
         return test_class(path, workdir, module,
                           language=language,
                           expect_errors=expect_errors,
+                          warning_errors=warning_errors,
                           annotate=self.annotate,
                           cleanup_workdir=self.cleanup_workdir,
                           cleanup_sharedlibs=self.cleanup_sharedlibs,
@@ -260,7 +270,8 @@ class TestBuilder(object):
 
 class CythonCompileTestCase(unittest.TestCase):
     def __init__(self, test_directory, workdir, module, language='c',
-                 expect_errors=False, annotate=False, cleanup_workdir=True,
+                 expect_errors=False, warning_errors=False,
+                 annotate=False, cleanup_workdir=True,
                  cleanup_sharedlibs=True, cython_only=False, fork=True,
                  language_level=2):
         self.test_directory = test_directory
@@ -268,6 +279,7 @@ class CythonCompileTestCase(unittest.TestCase):
         self.module = module
         self.language = language
         self.expect_errors = expect_errors
+        self.warning_errors = warning_errors
         self.annotate = annotate
         self.cleanup_workdir = cleanup_workdir
         self.cleanup_sharedlibs = cleanup_sharedlibs
@@ -280,10 +292,16 @@ class CythonCompileTestCase(unittest.TestCase):
         return "compiling (%s) %s" % (self.language, self.module)
 
     def setUp(self):
+        from Cython.Compiler import Options
+        Options.warning_errors = self.warning_errors
+
         if self.workdir not in sys.path:
             sys.path.insert(0, self.workdir)
 
     def tearDown(self):
+        from Cython.Compiler import Options
+        Options.warning_errors = False
+
         try:
             sys.path.remove(self.workdir)
         except ValueError:
