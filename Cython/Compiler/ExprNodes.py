@@ -2066,14 +2066,17 @@ class IndexNode(ExprNode):
         if index_type and index_type.is_int or isinstance(self.index, (IntNode, LongNode)):
             # indexing!
             if base_type is unicode_type:
-                # Py_UNICODE will automatically coerce to a unicode string
-                # if required, so this is safe. We only infer Py_UNICODE
-                # when the index is a C integer type. Otherwise, we may
+                # Py_UCS4 will automatically coerce to a unicode string
+                # if required, so this is safe.  We only infer Py_UCS4
+                # when the index is a C integer type.  Otherwise, we may
                 # need to use normal Python item access, in which case
                 # it's faster to return the one-char unicode string than
                 # to receive it, throw it away, and potentially rebuild it
                 # on a subsequent PyObject coercion.
-                return PyrexTypes.c_py_unicode_type
+                return PyrexTypes.c_py_ucs4_type
+            elif base_type is str_type:
+                # always returns str - Py2: bytes, Py3: unicode
+                return base_type
             elif isinstance(self.base, BytesNode):
                 #if env.global_scope().context.language_level >= 3:
                 #    # infering 'char' can be made to work in Python 3 mode
@@ -2084,8 +2087,8 @@ class IndexNode(ExprNode):
                 return base_type.base_type
 
         # may be slicing or indexing, we don't know
-        if base_type is unicode_type:
-            # this type always returns its own type on Python indexing/slicing
+        if base_type in (unicode_type, str_type):
+            # these types always returns their own type on Python indexing/slicing
             return base_type
         else:
             # TODO: Handle buffers (hopefully without too much redundancy).
@@ -2193,7 +2196,7 @@ class IndexNode(ExprNode):
                 if self.index.type.is_int and base_type is unicode_type:
                     # Py_UNICODE/Py_UCS4 will automatically coerce to a unicode string
                     # if required, so this is fast and safe
-                    self.type = PyrexTypes.c_py_unicode_type
+                    self.type = PyrexTypes.c_py_ucs4_type
                 elif is_slice and base_type in (bytes_type, str_type, unicode_type, list_type, tuple_type):
                     self.type = base_type
                 else:
@@ -2691,31 +2694,25 @@ class SliceNode(ExprNode):
     #  stop      ExprNode
     #  step      ExprNode
 
+    subexprs = ['start', 'stop', 'step']
+
     type = py_object_type
     is_temp = 1
 
     def calculate_constant_result(self):
-        self.constant_result = self.base.constant_result[
-            self.start.constant_result : \
-                self.stop.constant_result : \
-                self.step.constant_result]
+        self.constant_result = slice(
+            self.start.constant_result,
+            self.stop.constant_result,
+            self.step.constant_result)
 
     def compile_time_value(self, denv):
         start = self.start.compile_time_value(denv)
-        if self.stop is None:
-            stop = None
-        else:
-            stop = self.stop.compile_time_value(denv)
-        if self.step is None:
-            step = None
-        else:
-            step = self.step.compile_time_value(denv)
+        stop = self.stop.compile_time_value(denv)
+        step = self.step.compile_time_value(denv)
         try:
             return slice(start, stop, step)
         except Exception, e:
             self.compile_time_value_error(e)
-
-    subexprs = ['start', 'stop', 'step']
 
     def analyse_types(self, env):
         self.start.analyse_types(env)
@@ -2724,10 +2721,21 @@ class SliceNode(ExprNode):
         self.start = self.start.coerce_to_pyobject(env)
         self.stop = self.stop.coerce_to_pyobject(env)
         self.step = self.step.coerce_to_pyobject(env)
+        if self.start.is_literal and self.stop.is_literal and self.step.is_literal:
+            self.is_literal = True
+            self.is_temp = False
 
     gil_message = "Constructing Python slice object"
 
+    def calculate_result_code(self):
+        return self.result_code
+
     def generate_result_code(self, code):
+        if self.is_literal:
+            self.result_code = code.get_py_const(py_object_type, 'slice_', cleanup_level=2)
+            code = code.get_cached_constants_writer()
+            code.mark_pos(self.pos)
+
         code.putln(
             "%s = PySlice_New(%s, %s, %s); %s" % (
                 self.result(),
@@ -2736,6 +2744,8 @@ class SliceNode(ExprNode):
                 self.step.py_result(),
                 code.error_goto_if_null(self.result(), self.pos)))
         code.put_gotref(self.py_result())
+        if self.is_literal:
+            code.put_giveref(self.py_result())
 
 
 class CallNode(ExprNode):
@@ -6655,11 +6665,43 @@ static CYTHON_INLINE int __Pyx_UnicodeContains(PyObject* unicode, Py_UNICODE cha
 """,
 impl="""
 static CYTHON_INLINE int __Pyx_UnicodeContains(PyObject* unicode, Py_UNICODE character) {
+    Py_UNICODE* pos;
     const Py_ssize_t length = PyUnicode_GET_SIZE(unicode);
     Py_UNICODE* char_start = PyUnicode_AS_UNICODE(unicode);
-    Py_UNICODE* pos;
+
     for (pos=char_start; pos < char_start+length; pos++) {
-        if (character == pos[0]) return 1;
+        if (unlikely(character == pos[0])) return 1;
+    }
+    return 0;
+}
+""")
+
+py_ucs4_in_unicode_utility_code = UtilityCode(
+proto="""
+static CYTHON_INLINE int __Pyx_UnicodeContainsUCS4(PyObject* unicode, Py_UCS4 character); /*proto*/
+""",
+# additionally handles surrogate pairs in 16bit Unicode builds
+impl="""
+static CYTHON_INLINE int __Pyx_UnicodeContainsUCS4(PyObject* unicode, Py_UCS4 character) {
+    Py_UNICODE* pos;
+    Py_UNICODE uchar;
+    const Py_ssize_t length = PyUnicode_GET_SIZE(unicode);
+    Py_UNICODE* char_start = PyUnicode_AS_UNICODE(unicode);
+
+    #if Py_UNICODE_SIZE == 2
+    if (unlikely(character > 65535)) {
+        Py_UNICODE high_val, low_val;
+        high_val = (Py_UNICODE) (0xD800 | (((character - 0x10000) >> 10) & ((1<<10)-1)));
+        low_val  = (Py_UNICODE) (0xDC00 | ( (character - 0x10000)        & ((1<<10)-1)));
+        for (pos=char_start; pos < char_start+length-1; pos++) {
+            if (unlikely(high_val == pos[0]) & unlikely(low_val == pos[1])) return 1;
+        }
+        return 0;
+    }
+    #endif
+    uchar = (Py_UNICODE) character;
+    for (pos=char_start; pos < char_start+length; pos++) {
+        if (unlikely(uchar == pos[0])) return 1;
     }
     return 0;
 }
@@ -6757,7 +6799,12 @@ class PrimaryCmpNode(ExprNode, CmpNode):
                     error(self.pos, "Cascading comparison not yet supported for 'int_val in string'.")
                     return
                 if self.operand2.type is unicode_type:
-                    env.use_utility_code(pyunicode_in_unicode_utility_code)
+                    self.uchar_test_type = PyrexTypes.widest_numeric_type(
+                        self.operand1.type, PyrexTypes.c_py_unicode_type)
+                    if self.uchar_test_type is PyrexTypes.c_py_unicode_type:
+                        env.use_utility_code(pyunicode_in_unicode_utility_code)
+                    else:
+                        env.use_utility_code(py_ucs4_in_unicode_utility_code)
                 else:
                     if self.operand1.type is PyrexTypes.c_uchar_type:
                         self.operand1 = self.operand1.coerce_to(PyrexTypes.c_char_type, env)
@@ -6847,10 +6894,13 @@ class PrimaryCmpNode(ExprNode, CmpNode):
                 self.operand1.result(),
                 self.operand2.result())
         elif self.is_c_string_contains():
-            if self.operand2.type is bytes_type:
-                method = "__Pyx_BytesContains"
+            if self.operand2.type is unicode_type:
+                if self.uchar_test_type is PyrexTypes.c_py_unicode_type:
+                    method = "__Pyx_UnicodeContains"
+                else:
+                    method = "__Pyx_UnicodeContainsUCS4"
             else:
-                method = "__Pyx_UnicodeContains"
+                method = "__Pyx_BytesContains"
             if self.operator == "not_in":
                 negation = "!"
             else:
