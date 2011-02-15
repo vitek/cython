@@ -98,7 +98,7 @@ KEEP_2X_FILES = [
     os.path.join('Cython', 'Debugger', 'libpython.py'),
 ]
 
-
+COMPILER = None
 INCLUDE_DIRS = [ d for d in os.getenv('INCLUDE', '').split(os.pathsep) if d ]
 CFLAGS = os.getenv('CFLAGS', '').split()
 
@@ -432,20 +432,24 @@ class CythonCompileTestCase(unittest.TestCase):
             if incdir:
                 build_extension.include_dirs.append(incdir)
             build_extension.finalize_options()
+            if COMPILER:
+                build_extension.compiler = COMPILER
             ext_include_dirs = []
             for match, get_additional_include_dirs in EXT_DEP_INCLUDES:
                 if match(module):
                     ext_include_dirs += get_additional_include_dirs()
-            self.copy_related_files(test_directory, workdir, module)
-
+            ext_compile_flags = CFLAGS[:]
+            if  build_extension.compiler == 'mingw32':
+                ext_compile_flags.append('-Wno-format')
             if extra_extension_args is None:
                 extra_extension_args = {}
 
+            self.copy_related_files(test_directory, workdir, module)
             extension = Extension(
                 module,
                 sources = self.find_source_files(workdir, module),
                 include_dirs = ext_include_dirs,
-                extra_compile_args = CFLAGS,
+                extra_compile_args = ext_compile_flags,
                 **extra_extension_args
                 )
             if self.language == 'cpp':
@@ -1034,6 +1038,8 @@ def main():
     parser.add_option("--no-cython", dest="with_cython",
                       action="store_false", default=True,
                       help="do not run the Cython compiler, only the C compiler")
+    parser.add_option("--compiler", dest="compiler", default=None,
+                      help="C compiler type")
     parser.add_option("--no-c", dest="use_c",
                       action="store_false", default=True,
                       help="do not test C compilation")
@@ -1217,6 +1223,9 @@ def main():
     if sys.platform in ['win32', 'cygwin'] and sys.version_info < (2,6):
         exclude_selectors += [ lambda x: x == "run.specialfloat" ]
 
+    global COMPILER
+    if options.compiler:
+        COMPILER = options.compiler
     languages = []
     if options.use_c:
         languages.append('c')

@@ -1539,7 +1539,6 @@ class FuncDefNode(StatNode, BlockNode):
 
     def generate_arg_none_check(self, arg, code):
         # Generate None check for one argument.
-        code.globalstate.use_utility_code(arg_type_test_utility_code)
         code.putln('if (unlikely(((PyObject *)%s) == Py_None)) {' % arg.entry.cname)
         code.putln('''PyErr_Format(PyExc_TypeError, "Argument '%s' must not be None"); %s''' % (
             arg.name,
@@ -5135,7 +5134,7 @@ class GILStatNode(TryFinallyStatNode):
             code.putln("#endif")
         else:
             code.putln("#ifdef WITH_THREAD")
-            code.putln("PyThreadState *_save;")
+            code.putln("PyThreadState *_save = NULL;")
             code.putln("#endif")
             code.putln("Py_UNBLOCK_THREADS")
         TryFinallyStatNode.generate_execution_code(self, code)
