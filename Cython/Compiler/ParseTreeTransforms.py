@@ -141,7 +141,8 @@ class RemoveUnreachableCode(CythonTransform):
 
     def visit_StatListNode(self, node):
         self.visitchildren(node)
-        for idx, stat in enumerate(node.stats, 1):
+        for idx, stat in enumerate(node.stats):
+            idx += 1
             if stat.is_terminator:
                 if idx < len(node.stats):
                     warning(node.stats[idx].pos, "Unreachable code", 2)
