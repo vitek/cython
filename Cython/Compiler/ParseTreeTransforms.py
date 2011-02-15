@@ -1820,3 +1820,472 @@ class DebugTransform(CythonTransform):
             self.tb.start('LocalVar', attrs)
             self.tb.end('LocalVar')
 
+
+class ControlBlock(object):
+    def __init__(self, title=None):
+        self.stats = []
+        self.gen = set()
+        self.kill = set()
+
+        self.children = set()
+        self.parents = set()
+        self.positions = set()
+
+        self.title = title
+
+        self.assignments = set()
+
+    def detach(self):
+        """Detach block from parents and children"""
+        for child in self.children:
+            child.parents.remove(self)
+        for parent in self.parents:
+            parent.children.remove(self)
+        self.parents.clear()
+        self.children.clear()
+
+    def add_child(self, block):
+        self.children.add(block)
+        block.parents.add(self)
+
+    def add_position(self, node):
+        self.positions.add(node.pos[:2])
+
+    def add_assignment(self, name):
+        self.stats.append(Assignment(self.name))
+        self.assignments.add(self.name)
+
+    def add_name_node(self, node):
+        self.stats.append(VariableUse(node))
+
+    def add_argument(self, node):
+        self.stats.append(Argument(node))
+
+
+class ControlFlow(object):
+    """Control-flow graph"""
+    def __init__(self):
+        self.branches = []
+        self.loops = []
+        self.exceptions = []
+        self.blocks = set()
+        self.block = None # Current block
+
+    def newblock(self, parent=None, attach=True):
+        block = ControlBlock()
+        if attach:
+            self.blocks.add(block)
+        if parent:
+            parent.add_child(block)
+        return block
+
+    def nextblock(self, parent=None):
+        """Return new block linked to the current one."""
+        block = ControlBlock()
+        self.blocks.add(block)
+        if parent:
+            parent.add_child(block)
+        elif self.block:
+            self.block.add_child(block)
+        self.block = block
+        return self.block
+
+    def normalize(self):
+        """Delete empty and orphan blocks."""
+        while True:
+            dead = set()
+            for block in self.blocks:
+                # Orphan block
+                if not block.parents:
+                    block.detach()
+                    dead.add(block)
+                # Empry block
+                elif not block.stats and not block.positions:
+                    for parent in block.parents: # Re-parent
+                        for child in block.children:
+                            parent.add_child(child)
+                    block.detach()
+                    dead.add(block)
+            if not dead:
+                break
+            self.blocks -= dead
+
+
+class Loop(object):
+    """Loop helper."""
+    def __init__(self, next_block, loop_block):
+        self.next_block = next_block
+        self.loop_block = loop_block
+
+class ExceptionHelper(object):
+    def __init__(self, entry_point, after_finally=None):
+        self.entry_point = entry_point
+        self.after_finally = after_finally
+
+class Assignment(object):
+    is_initialized = True
+
+    def __init__(self, node):
+        self.entry = node.entry
+        self.pos = node.pos
+
+    def __repr__(self):
+        return 'Assignment(name=%s)' % self.entry.name
+
+class Unbound(Assignment):
+    is_initialized = False
+
+    def __init__(self, entry):
+        self.entry = entry
+        self.pos = None
+
+    def __repr__(self):
+        return 'Unbound(name=%s)' % self.entry.name
+
+class Argument(Assignment):
+    def __init__(self, entry):
+        self.entry = entry
+        self.pos = None
+
+    def __repr__(self):
+        return 'Argument(name=%s)' % self.entry.name
+
+class VariableUse(object):
+
+    def __init__(self, node):
+        self.entry = node.entry
+        self.pos = node.pos
+
+
+class GVContext(object):
+    def __init__(self):
+        self.blockids = {}
+        self.nextid = 0
+        self.children = []
+
+    def add(self, child):
+        self.children.append(child)
+
+    def nodeid(self, block):
+        if block not in self.blockids:
+            self.blockids[block] = 'block%d' % self.nextid
+            self.nextid += 1
+        return self.blockids[block]
+
+    def extract_sources(self, block):
+        if not block.positions:
+            return 'empty'
+        start = min(block.positions)
+        stop = max(block.positions)
+        return '\\n'.join([l.strip() for l in list(start[0].get_lines())[start[1] - 1:stop[1]]]).replace('\n', '\\n')
+
+    def render(self, fp, name):
+        """Render graphviz dot graph"""
+        fp.write('digraph %s {\n' % name)
+        fp.write(' node [shape=box];\n')
+        for child in self.children:
+            child.render(fp, self)
+        fp.write('}\n')
+
+class GV(object):
+    def __init__(self, name, flow):
+        self.name = name
+        self.flow = flow
+
+    def render(self, fp, ctx):
+        fp.write(' subgraph %s {\n' % self.name)
+        for block in self.flow.blocks:
+            pid = ctx.nodeid(block)
+            fp.write('  %s [label="%s"];\n' % (pid, ctx.extract_sources(block)))
+        for block in self.flow.blocks:
+            pid = ctx.nodeid(block)
+            for child in block.children:
+                fp.write('  %s -> %s;\n' % (pid, ctx.nodeid(child)))
+        fp.write(' }\n')
+
+
+class CreateControlFlowGraph(CythonTransform):
+    """Create NameNode use and assignment graph."""
+
+    def visit_ModuleNode(self, node):
+        self.gv_ctx = GVContext()
+
+        self.stack = []
+        self.flow = ControlFlow()
+        self.flow.nextblock()
+        self.visitchildren(node)
+
+        import sys
+        self.gv_ctx.render(sys.stdout, 'module')
+        return node
+
+    def visit_DefNode(self, node):
+        self.stack.append(self.flow)
+        self.flow = ControlFlow()
+
+        # Enter block
+        def_block = self.flow.newblock(attach=False)
+        def_block.add_position(node)
+        # Function body block
+        self.flow.nextblock(def_block)
+        self.visitchildren(node)
+        # Cleanup graph
+        self.flow.normalize()
+        self.flow.blocks.add(def_block)
+
+        self.gv_ctx.add(GV(node.local_scope.name, self.flow))
+
+        self.flow = self.stack.pop()
+        return node
+
+    def visit_SingleAssignmentNode(self, node):
+        self.visit(node.rhs)
+        self.flow.block.stats.append(Assignment(node.lhs))
+        return node
+
+    def visit_CArgDeclNode(self, node):
+        if self.flow.block:
+            self.flow.block.add_argument(node)
+        return node
+
+    def visit_PyArgDeclNode(self, node):
+        if self.flow.block:
+            self.flow.block.add_argument(node)
+        return node
+
+    def visit_NameNode(self, node):
+        if self.flow.block:
+            self.flow.block.add_name_node(node)
+        return node
+
+    def visit_StatListNode(self, node):
+        for stat in node.stats:
+            if not self.flow.block:
+                break
+            self.visit(stat)
+        return node
+
+    def visit_Node(self, node):
+        self.visitchildren(node)
+        if self.flow.block:
+            self.flow.block.add_position(node)
+        return node
+
+    def visit_IfStatNode(self, node):
+        next_block = self.flow.newblock()
+        parent = self.flow.block
+        # If clauses
+        for clause in node.if_clauses:
+            parent = self.flow.nextblock(parent)
+            self.visit(clause.condition)
+            self.flow.nextblock()
+            self.visit(clause.body)
+            if self.flow.block:
+                self.flow.block.add_child(next_block)
+        # Else clause
+        if node.else_clause:
+            self.flow.nextblock(parent=parent)
+            self.visit(node.else_clause)
+            if self.flow.block:
+                self.flow.block.add_child(next_block)
+        else:
+            parent.add_child(next_block)
+
+        if next_block.parents:
+            self.flow.block = next_block
+        else:
+            self.flow.block = None
+        return node
+
+    def visit_WhileStatNode(self, node):
+        condition_block = self.flow.nextblock()
+        next_block = self.flow.newblock()
+        # Condition block
+        self.flow.loops.append(Loop(next_block, condition_block))
+        self.visit(node.condition)
+        self.flow.block.add_child(next_block)
+        # Body block
+        self.flow.nextblock()
+        self.visit(node.body)
+        # Loop it
+        if self.flow.block:
+            self.flow.block.add_child(condition_block)
+        # Else clause
+        if node.else_clause:
+            self.flow.nextblock(parent=condition_block)
+            self.visit(node.else_clause)
+            if self.flow.block:
+                self.flow.block.add_child(next_block)
+        else:
+            condition_block.add_child(next_block)
+        self.flow.loops.pop()
+        self.flow.block = next_block
+        return node
+
+    def visit_ForInStatNode(self, node):
+        condition_block = self.flow.nextblock()
+        next_block = self.flow.newblock()
+        # Condition with iterator
+        self.flow.loops.append(Loop(next_block, condition_block))
+        self.visit(node.iterator)
+        self.flow.block.add_child(next_block)
+        # Target assignment
+        self.flow.nextblock()
+        self.visit(node.target)
+        # Body block
+        self.flow.nextblock()
+        self.visit(node.body)
+        # Loop it
+        if self.flow.block:
+            self.flow.block.add_child(condition_block)
+        # Else clause
+        if node.else_clause:
+            self.flow.nextblock(parent=condition_block)
+            self.visit(node.else_clause)
+            if self.flow.block:
+                self.flow.block.add_child(next_block)
+        else:
+            condition_block.add_child(next_block)
+        self.flow.loops.pop()
+        self.flow.block = next_block
+        return node
+
+    def visit_ForFromStatNode(self, node):
+        raise InternalError, "for-from statement is not supported now"
+
+    def visit_LoopNode(self, node):
+        raise InternalError, "Generic loops are not supported"
+
+    def visit_WithStatNode(self, node):
+        raise InternalError, "with statement is not supported"
+
+    def visit_TryExceptStatNode(self, node):
+        # After exception handling
+        next_block = self.flow.newblock()
+        # Body block
+        self.flow.newblock()
+        # Exception entry point
+        entry_point = self.flow.newblock()
+        self.flow.exceptions.append(ExceptionHelper(entry_point))
+        self.flow.nextblock()
+        ## XXX: links to exception handling point should be added by
+        ## XXX: children nodes
+        self.flow.block.add_child(entry_point)
+        self.visit(node.body)
+        self.flow.exceptions.pop()
+
+        # After exception
+        if self.flow.block:
+            if node.else_clause:
+                self.flow.nextblock()
+                self.visit(node.else_clause)
+            self.flow.block.add_child(next_block)
+
+        for clause in node.except_clauses:
+            self.flow.block = entry_point
+            if clause.pattern:
+                for pattern in clause.pattern:
+                    self.visit(pattern)
+            else:
+                # TODO: handle * pattern
+                pass
+            # TODO: mark `clause.target` as assignment
+            entry_point = self.flow.newblock(parent=self.flow.block)
+            self.flow.nextblock()
+            self.visit(clause.body)
+            if self.flow.block:
+                self.flow.block.add_child(next_block)
+
+        if self.flow.exceptions:
+            entry_point.add_child(self.flow.exceptions[-1].entry_point)
+
+        if next_block.parents:
+            self.flow.block = next_block
+        else:
+            self.flow.block = None
+        return node
+
+    def visit_TryFinallyStatNode(self, node):
+        ## TODO: handle return, continue and so on
+        # Exception entry point
+        entry_point = self.flow.newblock()
+        after_finally = self.flow.newblock()
+        self.flow.exceptions.append(ExceptionHelper(entry_point, after_finally))
+        self.flow.nextblock()
+        self.flow.block.add_child(entry_point)
+        self.visit(node.body)
+        ## XXX: Build finally block first
+        if self.flow.block:
+            self.flow.block.add_child(entry_point)
+            body_alive = True
+        else:
+            body_alive = False
+        self.flow.exceptions.pop()
+
+        self.flow.block = entry_point
+        self.visit(node.finally_clause)
+        if self.flow.block:
+            if self.flow.exceptions:
+                self.flow.block.add_child(self.flow.exceptions[-1].entry_point)
+            self.flow.block.add_child(after_finally)
+            if body_alive:
+                self.flow.block = after_finally
+            else:
+                self.flow.block = None
+        return node
+
+    def visit_RaiseStatNode(self, node):
+        self.flow.block.add_position(node)
+        if self.flow.exceptions:
+            self.flow.block.add_child(self.flow.exceptions[-1].entry_point)
+        self.flow.block = None
+        return node
+
+    def visit_ReraiseStatNode(self, node):
+        self.flow.block.add_position(node)
+        if self.flow.exceptions:
+            self.block.add_child(self.flow.exceptions[-1].entry_point)
+        self.flow.block = None
+        return node
+
+    def visit_ReturnStatNode(self, node):
+        self.flow.block.add_position(node)
+        ## TODO: Exit point ref
+
+        for exception in self.flow.exceptions[::-1]:
+            if exception.after_finally:
+                self.flow.block.add_child(exception.entry_point)
+        self.flow.block = None
+        return node
+
+    def visit_BreakStatNode(self, node):
+        if not self.flow.loops:
+            error(node.pos, "break statement not inside loop")
+            return node
+        loop = self.flow.loops[-1]
+        self.flow.block.add_position(node)
+        for exception in self.flow.exceptions[::-1]:
+            if exception.after_finally:
+                self.flow.block.add_child(exception.entry_point)
+                exception.after_finally.add_child(loop.next_block)
+                break
+        else:
+            self.flow.block.add_child(loop.next_block)
+        self.flow.block = None
+        return node
+
+    def visit_ContinueStatNode(self, node):
+        if not self.flow.loops:
+            error(node.pos, "continue statement not inside loop")
+            return node
+        loop = self.flow.loops[-1]
+        self.flow.block.add_position(node)
+        for exception in self.flow.exceptions[::-1]:
+            if exception.after_finally:
+                self.flow.block.add_child(exception.entry_point)
+                exception.after_finally.add_child(loop.loop_block)
+                break
+        else:
+            self.flow.block.add_child(loop.loop_block)
+        self.flow.block = None
+        return node
