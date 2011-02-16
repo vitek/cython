@@ -1926,7 +1926,10 @@ class Assignment(object):
     is_initialized = True
 
     def __init__(self, node):
-        self.entry = node.entry
+        if not hasattr(node, 'entry'):
+            self.entry = None
+        else:
+            self.entry = node.entry
         self.pos = node.pos
 
     def __repr__(self):
