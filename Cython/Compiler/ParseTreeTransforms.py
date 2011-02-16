@@ -2023,11 +2023,12 @@ class CreateControlFlowGraph(CythonTransform):
         self.flow.nextblock()
         self.visitchildren(node)
 
-        import sys
-        self.gv_ctx.render(sys.stdout, 'module')
+        if self.gv_ctx.children:
+            import sys
+            self.gv_ctx.render(sys.stdout, 'module')
         return node
 
-    def visit_DefNode(self, node):
+    def visit_FuncDefNode(self, node):
         self.stack.append(self.flow)
         self.flow = ControlFlow()
 
