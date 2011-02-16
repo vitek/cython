@@ -2188,7 +2188,8 @@ class CreateControlFlowGraph(CythonTransform):
             if node.else_clause:
                 self.flow.nextblock()
                 self.visit(node.else_clause)
-            self.flow.block.add_child(next_block)
+            if self.flow.block:
+                self.flow.block.add_child(next_block)
 
         for clause in node.except_clauses:
             self.flow.block = entry_point
