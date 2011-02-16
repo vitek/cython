@@ -1965,6 +1965,7 @@ class GVContext(object):
         self.blockids = {}
         self.nextid = 0
         self.children = []
+        self.sources = {}
 
     def add(self, child):
         self.children.append(child)
@@ -1980,7 +1981,11 @@ class GVContext(object):
             return 'empty'
         start = min(block.positions)
         stop = max(block.positions)
-        return '\\n'.join([l.strip() for l in list(start[0].get_lines())[start[1] - 1:stop[1]]]).replace('\n', '\\n')
+        srcdescr = start[0]
+        if not srcdescr in self.sources:
+            self.sources[srcdescr] = list(srcdescr.get_lines())
+        lines = self.sources[srcdescr]
+        return '\\n'.join([l.strip() for l in lines[start[1] - 1:stop[1]]]).replace('"', '\\"').replace('\n', '\\n')
 
     def render(self, fp, name):
         """Render graphviz dot graph"""
