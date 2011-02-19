@@ -1890,25 +1890,27 @@ class ControlFlow(object):
         self.block = block
         return self.block
 
-    def normalize(self):
-        """Delete empty and orphan blocks."""
-        while True:
-            dead = set()
-            for block in self.blocks:
-                # Orphan block
-                if not block.parents:
-                    block.detach()
-                    dead.add(block)
-                # Empry block
-                elif not block.stats and not block.positions:
-                    for parent in block.parents: # Re-parent
-                        for child in block.children:
-                            parent.add_child(child)
-                    block.detach()
-                    dead.add(block)
-            if not dead:
-                break
-            self.blocks -= dead
+    def normalize(self, root):
+        """Delete unreachable and orphan blocks."""
+        queue = set([root])
+        visited = set()
+        while queue:
+            root = queue.pop()
+            visited.add(root)
+            for child in root.children:
+                if child not in visited:
+                    queue.add(child)
+        unreachable = self.blocks - visited
+        for block in unreachable:
+            block.detach()
+        for block in visited:
+            if not block.stats and not block.positions:
+                for parent in block.parents: # Re-parent
+                    for child in block.children:
+                        parent.add_child(child)
+                block.detach()
+                unreachable.add(block)
+        self.blocks -= unreachable
 
 
 class Loop(object):
@@ -2039,7 +2041,7 @@ class CreateControlFlowGraph(CythonTransform):
         self.flow.nextblock(def_block)
         self.visitchildren(node)
         # Cleanup graph
-        self.flow.normalize()
+        self.flow.normalize(def_block)
         self.flow.blocks.add(def_block)
 
         self.gv_ctx.add(GV(node.local_scope.name, self.flow))
