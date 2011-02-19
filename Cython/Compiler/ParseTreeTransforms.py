@@ -1822,7 +1822,7 @@ class DebugTransform(CythonTransform):
 
 
 class ControlBlock(object):
-    def __init__(self, title=None):
+    def __init__(self):
         self.stats = []
         self.gen = set()
         self.kill = set()
@@ -1830,8 +1830,6 @@ class ControlBlock(object):
         self.children = set()
         self.parents = set()
         self.positions = set()
-
-        self.title = title
 
         self.assignments = set()
 
