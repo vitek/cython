@@ -1835,6 +1835,9 @@ class ControlBlock(object):
 
         self.assignments = set()
 
+    def empty(self):
+        return (not self.stats and not self.positions)
+
     def detach(self):
         """Detach block from parents and children"""
         for child in self.children:
@@ -1904,7 +1907,7 @@ class ControlFlow(object):
         for block in unreachable:
             block.detach()
         for block in visited:
-            if not block.stats and not block.positions:
+            if block.empty():
                 for parent in block.parents: # Re-parent
                     for child in block.children:
                         parent.add_child(child)
