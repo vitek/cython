@@ -2011,7 +2011,8 @@ class GV(object):
                 if isinstance(stat, Assignment):
                     label += '\n %s [definition]' % stat.entry.name
                 elif isinstance(stat, VariableUse):
-                    label += '\n %s [reference]' % stat.entry.name
+                    if stat.entry:
+                        label += '\n %s [reference]' % stat.entry.name
 
             pid = ctx.nodeid(block)
             fp.write('  %s [label="%s"];\n' % (pid, ctx.escape(label)))
