@@ -2266,7 +2266,8 @@ class CreateControlFlowGraph(CythonTransform):
             else:
                 # TODO: handle * pattern
                 pass
-            # TODO: mark `clause.target` as assignment
+            if clause.target:
+                self.flow.block.add_assignment(clause.target)
             entry_point = self.flow.newblock(parent=self.flow.block)
             self.flow.nextblock()
             self.visit(clause.body)
