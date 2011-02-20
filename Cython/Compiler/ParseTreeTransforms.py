@@ -2327,6 +2327,7 @@ class CreateControlFlowGraph(CythonTransform):
 
     def visit_ReturnStatNode(self, node):
         self.flow.block.add_position(node)
+        self.visitchildren(node)
         ## TODO: Exit point ref
 
         for exception in self.flow.exceptions[::-1]:
