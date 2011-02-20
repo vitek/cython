@@ -1988,7 +1988,7 @@ class GVContext(object):
         if not srcdescr in self.sources:
             self.sources[srcdescr] = list(srcdescr.get_lines())
         lines = self.sources[srcdescr]
-        return '\\n'.join([l.strip() for l in lines[start[1] - 1:stop[1]]]).replace('"', '\\"').replace('\n', '\\n')
+        return '\\n'.join([l.strip() for l in lines[start[1] - 1:stop[1]]])
 
     def render(self, fp, name):
         """Render graphviz dot graph"""
@@ -1998,6 +1998,9 @@ class GVContext(object):
             child.render(fp, self)
         fp.write('}\n')
 
+    def escape(self, text):
+        return text.replace('"', '\\"').replace('\n', '\\n')
+
 class GV(object):
     def __init__(self, name, flow):
         self.name = name
@@ -2006,8 +2009,16 @@ class GV(object):
     def render(self, fp, ctx):
         fp.write(' subgraph %s {\n' % self.name)
         for block in self.flow.blocks:
+            label = ctx.extract_sources(block)
+
+            for stat in block.stats:
+                if isinstance(stat, Assignment):
+                    label += '\n %s [definition]' % stat.entry.name
+                elif isinstance(stat, VariableUse):
+                    label += '\n %s [reference]' % stat.entry.name
+
             pid = ctx.nodeid(block)
-            fp.write('  %s [label="%s"];\n' % (pid, ctx.extract_sources(block)))
+            fp.write('  %s [label="%s"];\n' % (pid, ctx.escape(label)))
         for block in self.flow.blocks:
             pid = ctx.nodeid(block)
             for child in block.children:
