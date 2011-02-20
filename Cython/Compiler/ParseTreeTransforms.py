@@ -2179,13 +2179,13 @@ class CreateControlFlowGraph(CythonTransform):
         # Condition block
         self.flow.loops.append(Loop(next_block, condition_block))
         self.visit(node.condition)
-        self.flow.block.add_child(next_block)
         # Body block
         self.flow.nextblock()
         self.visit(node.body)
         # Loop it
         if self.flow.block:
             self.flow.block.add_child(condition_block)
+            self.flow.block.add_child(next_block)
         # Else clause
         if node.else_clause:
             self.flow.nextblock(parent=condition_block)
@@ -2204,10 +2204,9 @@ class CreateControlFlowGraph(CythonTransform):
         # Condition with iterator
         self.flow.loops.append(Loop(next_block, condition_block))
         self.visit(node.iterator)
-        self.flow.block.add_child(next_block)
         # Target assignment
         self.flow.nextblock()
-        self.visit(node.target)
+        self.flow.block.add_assignment(node.target)
         # Body block
         self.flow.nextblock()
         self.visit(node.body)
