@@ -1850,10 +1850,10 @@ class ControlBlock(object):
     def add_position(self, node):
         self.positions.add(node.pos[:2])
 
-    def add_assignment(self, node):
-        assignment = Assignment(node)
+    def add_assignment(self, lhs, rhs):
+        assignment = Assignment(lhs, rhs)
         self.stats.append(assignment)
-        self.gen[node.entry] = assignment
+        self.gen[lhs.entry] = assignment
 
     def add_name_node(self, node):
         self.stats.append(VariableUse(node))
@@ -1933,12 +1933,11 @@ class ExceptionHelper(object):
 class Assignment(object):
     is_initialized = True
 
-    def __init__(self, node):
-        if not hasattr(node, 'entry'):
-            self.entry = None
-        else:
-            self.entry = node.entry
-        self.pos = node.pos
+    def __init__(self, lhs, rhs):
+        self.lhs = lhs
+        self.rhs = rhs
+        self.entry = lhs.entry
+        self.pos = lhs.pos
 
     def __repr__(self):
         return '%s(entry=%r)' % (self.__class__.__name__, self.entry)
@@ -2115,9 +2114,31 @@ class CreateControlFlowGraph(CythonTransform):
         self.flow = self.stack.pop()
         return node
 
+    def mark_assignment(self, lhs, rhs=None):
+        if not rhs:
+            from TypeInference import object_expr
+            rhs = object_expr
+        if isinstance(lhs, (ExprNodes.NameNode, Nodes.PyArgDeclNode)):
+            if lhs.entry is None:
+                # TODO: This shouldn't happen...
+                return
+            self.flow.block.add_assignment(lhs, rhs)
+        elif isinstance(lhs, ExprNodes.SequenceNode):
+            for arg in lhs.args:
+                self.mark_assignment(arg)
+        else:
+            # Could use this info to infer cdef class attributes...
+            pass
+
     def visit_SingleAssignmentNode(self, node):
         self.visit(node.rhs)
-        self.flow.block.add_assignment(node.lhs)
+        self.mark_assignment(node.lhs)
+        return node
+
+    def visit_CascadedAssignmentNode(self, node):
+        self.visit(node.rhs)
+        for lhs in node.lhs_list:
+            self.mark_assignment(lhs, node.rhs)
         return node
 
     def visit_CArgDeclNode(self, node):
@@ -2207,7 +2228,7 @@ class CreateControlFlowGraph(CythonTransform):
         self.visit(node.iterator)
         # Target assignment
         self.flow.nextblock()
-        self.flow.block.add_assignment(node.target)
+        self.mark_assignment(node.target)
         # Body block
         self.flow.nextblock()
         self.visit(node.body)
@@ -2267,7 +2288,7 @@ class CreateControlFlowGraph(CythonTransform):
                 # TODO: handle * pattern
                 pass
             if clause.target:
-                self.flow.block.add_assignment(clause.target)
+                self.mark_assignment(clause.target)
             entry_point = self.flow.newblock(parent=self.flow.block)
             self.flow.nextblock()
             self.visit(clause.body)
