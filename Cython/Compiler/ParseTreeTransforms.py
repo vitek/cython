@@ -1941,7 +1941,7 @@ class Assignment(object):
         self.pos = node.pos
 
     def __repr__(self):
-        return 'Assignment(name=%s)' % self.entry.name
+        return '%s(entry=%r)' % (self.__class__.__name__, self.entry)
 
 class Uninitialized(object):
     is_initialized = False
@@ -1951,14 +1951,14 @@ class Argument(Assignment):
         self.entry = entry
         self.pos = None
 
-    def __repr__(self):
-        return 'Argument(name=%s)' % self.entry.name
-
 class VariableUse(object):
     def __init__(self, node):
         self.entry = node.entry
         self.pos = node.pos
         self.node = node
+
+    def __repr__(self):
+        return '%s(entry=%r)' % (self.__class__.__name__, self.entry)
 
 class GVContext(object):
     def __init__(self):
