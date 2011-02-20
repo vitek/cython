@@ -1824,14 +1824,12 @@ class DebugTransform(CythonTransform):
 class ControlBlock(object):
     def __init__(self):
         self.stats = []
-        self.gen = set()
-        self.kill = set()
+        self.gen = {}
+        self.kill = {}
 
         self.children = set()
         self.parents = set()
         self.positions = set()
-
-        self.assignments = set()
 
     def empty(self):
         return (not self.stats and not self.positions)
@@ -1852,12 +1850,19 @@ class ControlBlock(object):
     def add_position(self, node):
         self.positions.add(node.pos[:2])
 
-    def add_assignment(self, name):
-        self.stats.append(Assignment(self.name))
-        self.assignments.add(self.name)
+    def add_assignment(self, node):
+        assignment = Assignment(node)
+        self.stats.append(assignment)
+        self.gen[node.entry] = assignment
 
     def add_name_node(self, node):
         self.stats.append(VariableUse(node))
+        # Local variable is definitily bound after this block
+        self.kill[node.entry] = Uninitialized
+
+    def add_del(self, node):
+        self.stats.append(DeleteVariable(node))
+        self.gen[node.entry] = Uninitialized
 
     def add_argument(self, node):
         self.stats.append(Argument(node))
@@ -1938,15 +1943,8 @@ class Assignment(object):
     def __repr__(self):
         return 'Assignment(name=%s)' % self.entry.name
 
-class Unbound(Assignment):
+class Uninitialized(object):
     is_initialized = False
-
-    def __init__(self, entry):
-        self.entry = entry
-        self.pos = None
-
-    def __repr__(self):
-        return 'Unbound(name=%s)' % self.entry.name
 
 class Argument(Assignment):
     def __init__(self, entry):
@@ -1957,11 +1955,10 @@ class Argument(Assignment):
         return 'Argument(name=%s)' % self.entry.name
 
 class VariableUse(object):
-
     def __init__(self, node):
         self.entry = node.entry
         self.pos = node.pos
-
+        self.node = node
 
 class GVContext(object):
     def __init__(self):
@@ -2042,6 +2039,61 @@ class CreateControlFlowGraph(CythonTransform):
             self.gv_ctx.render(sys.stdout, 'module')
         return node
 
+    def check_definitions(self, node, flow, entry_point):
+        """Based on algo 9.11 from dragon book."""
+        for block in flow.blocks:
+            block.input = {}
+            block.output = {}
+            for entry, item in block.gen.items():
+                block.output[entry] = set([item])
+        entry_point.input = {}
+        entry_point.output = {}
+        for entry in node.local_scope.entries.values():
+            if entry.is_arg:
+                obj = Argument(entry)
+            else:
+                obj = Uninitialized
+            entry_point.gen[entry] = obj
+            entry_point.output[entry] = set([obj])
+        dirty = True
+        while dirty:
+            dirty = False
+            for block in flow.blocks:
+                input = {}
+                for parent in block.parents:
+                    for entry, items in parent.output.items():
+                        if entry in input:
+                            input[entry].update(items)
+                        else:
+                            input[entry] = items.copy()
+                output = {}
+                for entry, items in input.items():
+                    output[entry] = items.copy()
+                for entry in block.kill.keys():
+                    output[entry] = set([])
+                for entry, item in block.gen.items():
+                    output[entry] = set([item])
+                if output != block.output:
+                    dirty = True
+                block.input = input
+                block.output = output
+        for block in flow.blocks:
+            state = {}
+            for entry, items in block.input.items():
+                state[entry] = items.copy()
+            for stat in block.stats:
+                if isinstance(stat, Assignment):
+                    state[stat.entry] = set([stat])
+                elif isinstance(stat, VariableUse):
+                    if stat.entry not in state:
+                        continue
+                    if Uninitialized in state[stat.entry]:
+                        if len(state[stat.entry]) == 1:
+                            warning(stat.pos, "'%s' is used uninitialized" % stat.entry.name, 2)
+                        else:
+                            warning(stat.pos, "'%s' may be used uninitialized" % stat.entry.name, 2)
+                        state[stat.entry] -= set([Uninitialized])
+
     def visit_FuncDefNode(self, node):
         self.stack.append(self.flow)
         self.flow = ControlFlow()
@@ -2054,6 +2106,7 @@ class CreateControlFlowGraph(CythonTransform):
         self.visitchildren(node)
         # Cleanup graph
         self.flow.normalize(def_block)
+        self.check_definitions(node, self.flow, def_block)
         self.flow.blocks.add(def_block)
 
         self.gv_ctx.add(GV(node.local_scope.name, self.flow))
@@ -2063,7 +2116,7 @@ class CreateControlFlowGraph(CythonTransform):
 
     def visit_SingleAssignmentNode(self, node):
         self.visit(node.rhs)
-        self.flow.block.stats.append(Assignment(node.lhs))
+        self.flow.block.add_assignment(node.lhs)
         return node
 
     def visit_CArgDeclNode(self, node):
