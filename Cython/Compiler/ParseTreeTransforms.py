@@ -2154,6 +2154,13 @@ class CreateControlFlowGraph(CythonTransform):
             # Could use this info to infer cdef class attributes...
             pass
 
+    def visit_FromImportStatNode(self, node):
+        for name, target in node.items:
+            if name != "*":
+                self.mark_assignment(target)
+        self.visitchildren(node)
+        return node
+
     def visit_SingleAssignmentNode(self, node):
         self.visit(node.rhs)
         self.mark_assignment(node.lhs)
