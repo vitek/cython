@@ -1855,6 +1855,13 @@ class ControlBlock(object):
         self.stats.append(assignment)
         self.gen[lhs.entry] = assignment
 
+    def add_defnode(self, node, entry):
+        from TypeInference import object_expr
+        assignment = Assignment(node, object_expr)
+        assignment.entry = entry
+        self.stats.append(assignment)
+        self.gen[entry] = assignment
+
     def add_name_node(self, node, entry):
         self.stats.append(VariableUse(node, entry))
         # Local variable is definitily bound after this block
@@ -2122,7 +2129,13 @@ class CreateControlFlowGraph(CythonTransform):
         self.env = self.env_stack.pop()
         return node
 
+    def visit_DefNode(self, node):
+        self.flow.block.add_defnode(node, self.env.lookup(node.name))
+        return self.visit_FuncDefNode(node)
+
     def mark_assignment(self, lhs, rhs=None, internal=False):
+        if not self.flow.block:
+            return
         if self.flow.exceptions:
             self.flow.nextblock()
         if not rhs:
