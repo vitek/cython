@@ -17,6 +17,6 @@ def simple_for_pos(n):
     return a
 
 _ERRORS = """
-4:12: Variable 'a' may be used uninitialized
-10:12: Variable 'a' may be used uninitialized
+4:12: 'a' might be used uninitialized
+10:12: 'a' might be used uninitialized
 """

@@ -21,6 +21,6 @@ def simple_while_pos(n):
     return a
 
 _ERRORS = """
-5:12: Variable 'a' may be used uninitialized
-13:12: Variable 'a' may be used uninitialized
+5:12: 'a' might be used uninitialized
+13:12: 'a' might be used uninitialized
 """

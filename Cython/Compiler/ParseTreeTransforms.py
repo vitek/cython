@@ -2090,9 +2090,9 @@ class CreateControlFlowGraph(CythonTransform):
                         continue
                     if Uninitialized in state[stat.entry]:
                         if len(state[stat.entry]) == 1:
-                            warning(stat.pos, "Variable '%s' is used uninitialized" % stat.entry.name, 2)
+                            warning(stat.pos, "'%s' is used uninitialized" % stat.entry.name, 2)
                         else:
-                            warning(stat.pos, "Variable '%s' may be used uninitialized" % stat.entry.name, 2)
+                            warning(stat.pos, "'%s' might be used uninitialized" % stat.entry.name, 2)
                         state[stat.entry] -= set([Uninitialized])
 
     def visit_FuncDefNode(self, node):

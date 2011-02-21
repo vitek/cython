@@ -25,7 +25,7 @@ def ifelif(c1, c2):
     return a
 
 _ERRORS = """
-2:11: Variable 'a' is used uninitialized
-8:12: Variable 'a' may be used uninitialized
-25:12: Variable 'a' may be used uninitialized
+2:11: 'a' is used uninitialized
+8:12: 'a' might be used uninitialized
+25:12: 'a' might be used uninitialized
 """
