@@ -148,6 +148,7 @@ class Context(object):
             AutoTestDictTransform(self),
             EmbedSignature(self),
             EarlyReplaceBuiltinCalls(self),  ## Necessary?
+            CreateControlFlowGraph(self),
             MarkAssignments(self),
             MarkOverflowingArithmetic(self),
             TransformBuiltinMethods(self),  ## Necessary?
@@ -157,7 +158,6 @@ class Context(object):
             CreateClosureClasses(self),  ## After all lookups and type inference
             ExpandInplaceOperators(self),
             OptimizeBuiltinCalls(self),  ## Necessary?
-            CreateControlFlowGraph(self),
             IterationTransform(),
             SwitchTransform(),
             DropRefcountingTransform(),
