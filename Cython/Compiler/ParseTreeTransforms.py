@@ -1919,16 +1919,16 @@ class ControlFlow(object):
         self.blocks -= unreachable
 
 
-class Loop(object):
-    """Loop helper."""
+class LoopDescr(object):
     def __init__(self, next_block, loop_block):
         self.next_block = next_block
         self.loop_block = loop_block
 
-class ExceptionHelper(object):
-    def __init__(self, entry_point, after_finally=None):
+class ExceptionDescr(object):
+    def __init__(self, entry_point, finally_point=None, finally_end=None):
         self.entry_point = entry_point
-        self.after_finally = after_finally
+        self.finally_point = finally_point
+        self.finally_end = finally_end
 
 class Assignment(object):
     is_initialized = True
@@ -2202,7 +2202,7 @@ class CreateControlFlowGraph(CythonTransform):
         condition_block = self.flow.nextblock()
         next_block = self.flow.newblock()
         # Condition block
-        self.flow.loops.append(Loop(next_block, condition_block))
+        self.flow.loops.append(LoopDescr(next_block, condition_block))
         self.visit(node.condition)
         # Body block
         self.flow.nextblock()
@@ -2227,7 +2227,7 @@ class CreateControlFlowGraph(CythonTransform):
         condition_block = self.flow.nextblock()
         next_block = self.flow.newblock()
         # Condition with iterator
-        self.flow.loops.append(Loop(next_block, condition_block))
+        self.flow.loops.append(LoopDescr(next_block, condition_block))
         self.visit(node.iterator)
         # Target assignment
         self.flow.nextblock()
@@ -2266,7 +2266,7 @@ class CreateControlFlowGraph(CythonTransform):
         self.flow.newblock()
         # Exception entry point
         entry_point = self.flow.newblock()
-        self.flow.exceptions.append(ExceptionHelper(entry_point))
+        self.flow.exceptions.append(ExceptionDescr(entry_point))
         self.flow.nextblock()
         ## XXX: links to exception handling point should be added by
         ## XXX: children nodes
@@ -2308,30 +2308,30 @@ class CreateControlFlowGraph(CythonTransform):
         return node
 
     def visit_TryFinallyStatNode(self, node):
-        ## TODO: handle return, continue and so on
+        body_block = self.flow.nextblock()
+
         # Exception entry point
         entry_point = self.flow.newblock()
-        after_finally = self.flow.newblock()
-        self.flow.exceptions.append(ExceptionHelper(entry_point, after_finally))
-        self.flow.nextblock()
-        self.flow.block.add_child(entry_point)
-        self.visit(node.body)
-        ## XXX: Build finally block first
-        if self.flow.block:
-            self.flow.block.add_child(entry_point)
-            body_alive = True
-        else:
-            body_alive = False
-        self.flow.exceptions.pop()
-
         self.flow.block = entry_point
         self.visit(node.finally_clause)
+
+        # Normal execution
+        finally_point = self.flow.newblock()
+        self.flow.block = finally_point
+        self.visit(node.finally_clause)
+        finally_end = self.flow.block
+
+        self.flow.exceptions.append(ExceptionDescr(entry_point, finally_point, finally_end))
+        self.flow.block = body_block
+        ## XXX: Is it still required
+        body_block.add_child(entry_point)
+        self.visit(node.body)
+        self.flow.exceptions.pop()
+
         if self.flow.block:
-            if self.flow.exceptions:
-                self.flow.block.add_child(self.flow.exceptions[-1].entry_point)
-            self.flow.block.add_child(after_finally)
-            if body_alive:
-                self.flow.block = after_finally
+            self.flow.block.add_child(finally_point)
+            if finally_end:
+                self.flow.block = self.flow.nextblock(parent=finally_end)
             else:
                 self.flow.block = None
         return node
@@ -2353,11 +2353,14 @@ class CreateControlFlowGraph(CythonTransform):
     def visit_ReturnStatNode(self, node):
         self.flow.block.add_position(node)
         self.visitchildren(node)
-        ## TODO: Exit point ref
 
         for exception in self.flow.exceptions[::-1]:
-            if exception.after_finally:
-                self.flow.block.add_child(exception.entry_point)
+            if exception.finally_point:
+                self.flow.block.add_child(exception.finally_point)
+                # Add exit reference
+                break
+        else:
+            pass # Exit ref
         self.flow.block = None
         return node
 
@@ -2368,9 +2371,10 @@ class CreateControlFlowGraph(CythonTransform):
         loop = self.flow.loops[-1]
         self.flow.block.add_position(node)
         for exception in self.flow.exceptions[::-1]:
-            if exception.after_finally:
-                self.flow.block.add_child(exception.entry_point)
-                exception.after_finally.add_child(loop.next_block)
+            if exception.finally_point:
+                self.flow.block.add_child(exception.finally_point)
+                if exception.finally_end:
+                    exception.finally_end.add_child(loop.next_block)
                 break
         else:
             self.flow.block.add_child(loop.next_block)
@@ -2384,9 +2388,10 @@ class CreateControlFlowGraph(CythonTransform):
         loop = self.flow.loops[-1]
         self.flow.block.add_position(node)
         for exception in self.flow.exceptions[::-1]:
-            if exception.after_finally:
-                self.flow.block.add_child(exception.entry_point)
-                exception.after_finally.add_child(loop.loop_block)
+            if exception.finally_point:
+                self.flow.block.add_child(exception.finally_point)
+                if exception.finally_end:
+                    exception.finally_end.add_child(loop.loop_block)
                 break
         else:
             self.flow.block.add_child(loop.loop_block)
