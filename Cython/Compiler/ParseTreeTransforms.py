@@ -2059,7 +2059,7 @@ class CreateControlFlowGraph(CythonTransform):
         entry_point.input = {}
         entry_point.output = {}
         for entry in node.local_scope.entries.values():
-            if entry.from_closure:
+            if entry.from_closure or entry.is_pyglobal or entry.is_cglobal:
                 continue
             if entry.is_arg:
                 obj = Argument(entry)
