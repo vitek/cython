@@ -55,5 +55,4 @@ _ERRORS = """
 8:12: Variable 'e' may be used uninitialized
 8:15: Variable 'i' may be used uninitialized
 15:12: Variable 'a' may be used uninitialized
-45:12: Variable 'a' may be used uninitialized
 """
