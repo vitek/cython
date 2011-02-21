@@ -2130,7 +2130,8 @@ class CreateControlFlowGraph(CythonTransform):
         return node
 
     def visit_DefNode(self, node):
-        self.flow.block.add_defnode(node, self.env.lookup(node.name))
+        if self.flow.block:
+            self.flow.block.add_defnode(node, self.env.lookup(node.name))
         return self.visit_FuncDefNode(node)
 
     def mark_assignment(self, lhs, rhs=None, internal=False):
