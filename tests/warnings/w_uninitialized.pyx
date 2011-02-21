@@ -24,6 +24,12 @@ def ifelif(c1, c2):
         a = 3
     return a
 
+def fromclosure():
+    def bar():
+        print a
+    a = 1
+    return bar
+
 _ERRORS = """
 2:11: 'a' is used uninitialized
 8:12: 'a' might be used uninitialized
