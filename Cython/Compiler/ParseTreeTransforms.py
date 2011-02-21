@@ -1855,8 +1855,8 @@ class ControlBlock(object):
         self.stats.append(assignment)
         self.gen[lhs.entry] = assignment
 
-    def add_name_node(self, node):
-        self.stats.append(VariableUse(node))
+    def add_name_node(self, node, entry):
+        self.stats.append(VariableUse(node, entry))
         # Local variable is definitily bound after this block
         self.kill[node.entry] = Uninitialized
 
@@ -1951,10 +1951,10 @@ class Argument(Assignment):
         self.pos = None
 
 class VariableUse(object):
-    def __init__(self, node):
-        self.entry = node.entry
-        self.pos = node.pos
+    def __init__(self, node, entry):
         self.node = node
+        self.entry = entry
+        self.pos = node.pos
 
     def __repr__(self):
         return '%s(entry=%r)' % (self.__class__.__name__, self.entry)
@@ -2029,6 +2029,8 @@ class CreateControlFlowGraph(CythonTransform):
     def visit_ModuleNode(self, node):
         self.gv_ctx = GVContext()
 
+        self.env_stack = []
+        self.env = node.scope
         self.stack = []
         self.flow = ControlFlow()
         self.flow.nextblock()
@@ -2098,6 +2100,8 @@ class CreateControlFlowGraph(CythonTransform):
                         state[stat.entry] -= set([Uninitialized])
 
     def visit_FuncDefNode(self, node):
+        self.env_stack.append(self.env)
+        self.env = node.local_scope
         self.stack.append(self.flow)
         self.flow = ControlFlow()
 
@@ -2115,6 +2119,7 @@ class CreateControlFlowGraph(CythonTransform):
         self.gv_ctx.add(GV(node.local_scope.name, self.flow))
 
         self.flow = self.stack.pop()
+        self.env = self.env_stack.pop()
         return node
 
     def mark_assignment(self, lhs, rhs=None, internal=False):
@@ -2158,7 +2163,9 @@ class CreateControlFlowGraph(CythonTransform):
 
     def visit_NameNode(self, node):
         if self.flow.block:
-            self.flow.block.add_name_node(node)
+            entry = node.entry or self.env.lookup(node.name)
+            if entry:
+                self.flow.block.add_name_node(node, entry)
         return node
 
     def visit_StatListNode(self, node):
