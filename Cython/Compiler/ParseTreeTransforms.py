@@ -2044,7 +2044,7 @@ class CreateControlFlowGraph(CythonTransform):
         self.visitchildren(node)
 
         # For debug only: render graph
-        if self.gv_ctx.children and 1:
+        if self.gv_ctx.children and 0:
             import sys
             self.gv_ctx.render(sys.stdout, 'module')
         return node
