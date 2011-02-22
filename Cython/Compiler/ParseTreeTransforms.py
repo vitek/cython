@@ -2044,7 +2044,7 @@ class CreateControlFlowGraph(CythonTransform):
         self.visitchildren(node)
 
         # For debug only: render graph
-        if self.gv_ctx.children and 1:
+        if self.gv_ctx.children and 0:
             import sys
             self.gv_ctx.render(sys.stdout, 'module')
         return node
@@ -2376,7 +2376,7 @@ class CreateControlFlowGraph(CythonTransform):
     def visit_ReraiseStatNode(self, node):
         self.flow.block.add_position(node)
         if self.flow.exceptions:
-            self.block.add_child(self.flow.exceptions[-1].entry_point)
+            self.flow.block.add_child(self.flow.exceptions[-1].entry_point)
         self.flow.block = None
         return node
 
