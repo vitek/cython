@@ -1984,7 +1984,7 @@ class GVContext(object):
 
     def extract_sources(self, block):
         if not block.positions:
-            return 'empty'
+            return ''
         start = min(block.positions)
         stop = max(block.positions)
         srcdescr = start[0]
@@ -1993,12 +1993,12 @@ class GVContext(object):
         lines = self.sources[srcdescr]
         return '\\n'.join([l.strip() for l in lines[start[1] - 1:stop[1]]])
 
-    def render(self, fp, name):
+    def render(self, fp, name, annotate_defs=False):
         """Render graphviz dot graph"""
         fp.write('digraph %s {\n' % name)
         fp.write(' node [shape=box];\n')
         for child in self.children:
-            child.render(fp, self)
+            child.render(fp, self, annotate_defs)
         fp.write('}\n')
 
     def escape(self, text):
@@ -2009,18 +2009,19 @@ class GV(object):
         self.name = name
         self.flow = flow
 
-    def render(self, fp, ctx):
+    def render(self, fp, ctx, annotate_defs=False):
         fp.write(' subgraph %s {\n' % self.name)
         for block in self.flow.blocks:
             label = ctx.extract_sources(block)
-
-            for stat in block.stats:
-                if isinstance(stat, Assignment):
-                    label += '\n %s [definition]' % stat.entry.name
-                elif isinstance(stat, VariableUse):
-                    if stat.entry:
-                        label += '\n %s [reference]' % stat.entry.name
-
+            if annotate_defs:
+                for stat in block.stats:
+                    if isinstance(stat, Assignment):
+                        label += '\n %s [definition]' % stat.entry.name
+                    elif isinstance(stat, VariableUse):
+                        if stat.entry:
+                            label += '\n %s [reference]' % stat.entry.name
+            if not label:
+                label = 'empty'
             pid = ctx.nodeid(block)
             fp.write('  %s [label="%s"];\n' % (pid, ctx.escape(label)))
         for block in self.flow.blocks:
@@ -2045,9 +2046,10 @@ class CreateControlFlowGraph(CythonTransform):
 
         dot_output = self.current_directives['control_flow.dot_output']
         if dot_output:
+            annotate_defs = self.current_directives['control_flow.dot_annotate_defs']
             try:
                 fp = open(dot_output, 'wt')
-                self.gv_ctx.render(fp, 'module')
+                self.gv_ctx.render(fp, 'module', annotate_defs=annotate_defs)
             finally:
                 fp.close()
         return node

@@ -86,7 +86,8 @@ directive_defaults = {
     'warn.undeclared': False,
 
 # control flow
-    'control_flow.dot_output': None,
+    'control_flow.dot_output': None, # Graphviz output filename
+    'control_flow.dot_annotate_defs': False, # Annotate definitions
 
 # test support
     'test_assert_path_exists' : [],
