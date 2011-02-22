@@ -24,6 +24,12 @@ def ifelif(c1, c2):
         a = 3
     return a
 
+def nowimpossible(a):
+    if a:
+        b = 1
+    if a:
+        print b
+
 def fromclosure():
     def bar():
         print a
@@ -34,4 +40,5 @@ _ERRORS = """
 2:11: 'a' is used uninitialized
 8:12: 'a' might be used uninitialized
 25:12: 'a' might be used uninitialized
+31:15: 'b' might be used uninitialized
 """
