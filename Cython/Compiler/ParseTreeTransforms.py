@@ -2043,10 +2043,13 @@ class CreateControlFlowGraph(CythonTransform):
         self.flow.nextblock()
         self.visitchildren(node)
 
-        # For debug only: render graph
-        if self.gv_ctx.children and 0:
-            import sys
-            self.gv_ctx.render(sys.stdout, 'module')
+        dot_output = self.current_directives['control_flow.dot_output']
+        if dot_output:
+            try:
+                fp = open(dot_output, 'wt')
+                self.gv_ctx.render(fp, 'module')
+            finally:
+                fp.close()
         return node
 
     def check_definitions(self, node, flow, entry_point):

@@ -85,6 +85,9 @@ directive_defaults = {
     'warn': None,
     'warn.undeclared': False,
 
+# control flow
+    'control_flow.dot_output': None,
+
 # test support
     'test_assert_path_exists' : [],
     'test_fail_if_path_exists' : [],
@@ -98,6 +101,7 @@ directive_types = {
     'final' : bool,  # final cdef classes and methods
     'internal' : bool,  # cdef class visibility in the module dict
     'infer_types' : bool, # values can be True/None/False
+    'control_flow.dot_output': str,
     }
 
 for key, val in directive_defaults.items():
