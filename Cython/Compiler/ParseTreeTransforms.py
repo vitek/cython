@@ -2376,7 +2376,7 @@ class CreateControlFlowGraph(CythonTransform):
     def visit_ReraiseStatNode(self, node):
         self.flow.block.add_position(node)
         if self.flow.exceptions:
-            self.block.add_child(self.flow.exceptions[-1].entry_point)
+            self.flow.block.add_child(self.flow.exceptions[-1].entry_point)
         self.flow.block = None
         return node
 
