@@ -86,7 +86,7 @@ directive_defaults = {
     'warn.undeclared': False,
 
 # control flow
-    'control_flow.dot_output': None, # Graphviz output filename
+    'control_flow.dot_output': "", # Graphviz output filename
     'control_flow.dot_annotate_defs': False, # Annotate definitions
 
 # test support
@@ -102,7 +102,6 @@ directive_types = {
     'final' : bool,  # final cdef classes and methods
     'internal' : bool,  # cdef class visibility in the module dict
     'infer_types' : bool, # values can be True/None/False
-    'control_flow.dot_output': str,
     }
 
 for key, val in directive_defaults.items():
