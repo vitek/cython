@@ -110,7 +110,7 @@ class Context(object):
         from TypeInference import MarkAssignments, MarkOverflowingArithmetic
         from ParseTreeTransforms import AlignFunctionDefinitions, GilCheck
         from ParseTreeTransforms import RemoveUnreachableCode
-        from ParseTreeTransforms import CreateControlFlowGraph
+        from FlowControl import CreateControlFlowGraph
         from AnalysedTreeTransforms import AutoTestDictTransform
         from AutoDocTransforms import EmbedSignature
         from Optimize import FlattenInListTransform, SwitchTransform, IterationTransform
