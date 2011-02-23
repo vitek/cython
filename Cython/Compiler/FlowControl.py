@@ -63,8 +63,9 @@ class ControlBlock(object):
         self.kill[node.entry] = Uninitialized
 
     def add_del(self, node):
-        self.stats.append(DeleteVariable(node))
-        self.gen[node.entry] = Uninitialized
+        raise NotImplementedError, "Delete is not supported yet"
+        #self.stats.append(DeleteVariable(node))
+        #self.gen[node.entry] = Uninitialized
 
     def add_argument(self, node):
         self.stats.append(Argument(node))
