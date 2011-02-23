@@ -39,6 +39,7 @@ Options:
   -3                             Compile based on Python-3 syntax and code semantics.
   --fast-fail                    Abort the compilation on the first error
   --warning-error, -Werror       Make all warnings into errors
+  -Wextra                        Enable extra warnings
   -X, --directive <name>=<value>[,<name=value,...] Overrides a compiler directive
 """
 
@@ -134,6 +135,9 @@ def parse_command_line(args):
                 Options.fast_fail = True
             elif option in ('-Werror', '--warning-errors'):
                 Options.warning_errors = True
+            elif option == '-Wextra':
+                options.compiler_directives['warn.uninitialized'] = True
+                options.compiler_directives['warn.maybe_uninitialized'] = True
             elif option == "--disable-function-redefinition":
                 Options.disable_function_redefinition = True
             elif option in ("-X", "--directive"):
