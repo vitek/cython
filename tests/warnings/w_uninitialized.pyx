@@ -38,6 +38,17 @@ def fromclosure():
     a = 1
     return bar
 
+# Should work ok in both py2 and py3
+def list_comp(a):
+    return [i for i in a]
+
+def set_comp(a):
+    return set(i for i in a)
+
+def dict_comp(a):
+    return {i: j for i, j in a}
+
+
 _ERRORS = """
 4:11: 'a' is used uninitialized
 10:12: 'a' might be used uninitialized
