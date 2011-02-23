@@ -1,3 +1,5 @@
+# cython: warn.maybe_uninitialized=True
+
 def exc_target():
     try:
         {}['foo']
@@ -52,7 +54,7 @@ def exc_finally2():
     return a
 
 _ERRORS = """
-8:12: 'e' might be used uninitialized
-8:15: 'i' might be used uninitialized
-15:12: 'a' might be used uninitialized
+10:12: 'e' might be used uninitialized
+10:15: 'i' might be used uninitialized
+17:12: 'a' might be used uninitialized
 """

@@ -1,3 +1,5 @@
+# cython: warn.maybe_uninitialized=True
+
 def simple():
     print a
     a = 0
@@ -37,8 +39,8 @@ def fromclosure():
     return bar
 
 _ERRORS = """
-2:11: 'a' is used uninitialized
-8:12: 'a' might be used uninitialized
-25:12: 'a' might be used uninitialized
-31:15: 'b' might be used uninitialized
+4:11: 'a' is used uninitialized
+10:12: 'a' might be used uninitialized
+27:12: 'a' might be used uninitialized
+33:15: 'b' might be used uninitialized
 """

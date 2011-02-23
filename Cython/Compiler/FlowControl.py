@@ -242,7 +242,7 @@ class GV(object):
         fp.write(' }\n')
 
 
-def check_definitions(node, flow, entry_point):
+def check_definitions(compiler_directives, node, flow, entry_point):
     """Based on algo 9.11 from Dragon Book."""
 
     for block in flow.blocks:
@@ -295,9 +295,11 @@ def check_definitions(node, flow, entry_point):
                     continue
                 if Uninitialized in state[stat.entry]:
                     if len(state[stat.entry]) == 1:
-                        warning(stat.pos, "'%s' is used uninitialized" % stat.entry.name, 2)
+                        if compiler_directives['warn.uninitialized']:
+                            warning(stat.pos, "'%s' is used uninitialized" % stat.entry.name, 2)
                     else:
-                        warning(stat.pos, "'%s' might be used uninitialized" % stat.entry.name, 2)
+                        if compiler_directives['warn.maybe_uninitialized']:
+                            warning(stat.pos, "'%s' might be used uninitialized" % stat.entry.name, 2)
                     state[stat.entry] -= set([Uninitialized])
 
 
@@ -338,7 +340,7 @@ class CreateControlFlowGraph(CythonTransform):
         self.visitchildren(node)
         # Cleanup graph
         self.flow.normalize(def_block)
-        check_definitions(node, self.flow, def_block)
+        check_definitions(self.current_directives, node, self.flow, def_block)
         self.flow.blocks.add(def_block)
 
         self.gv_ctx.add(GV(node.local_scope.name, self.flow))

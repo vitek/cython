@@ -1,3 +1,5 @@
+# cython: warn.maybe_uninitialized=True
+
 def simple_for(n):
     for i in n:
         a = 1
@@ -17,6 +19,6 @@ def simple_for_pos(n):
     return a
 
 _ERRORS = """
-4:12: 'a' might be used uninitialized
-10:12: 'a' might be used uninitialized
+6:12: 'a' might be used uninitialized
+12:12: 'a' might be used uninitialized
 """

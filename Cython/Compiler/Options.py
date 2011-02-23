@@ -84,6 +84,8 @@ directive_defaults = {
 
     'warn': None,
     'warn.undeclared': False,
+    'warn.uninitialized': True,
+    'warn.maybe_uninitialized': False,
 
 # control flow
     'control_flow.dot_output': "", # Graphviz output filename

@@ -1,3 +1,5 @@
+# cython: warn.maybe_uninitialized=True
+
 def simple_while(n):
     while n > 0:
         n -= 1
@@ -21,6 +23,6 @@ def simple_while_pos(n):
     return a
 
 _ERRORS = """
-5:12: 'a' might be used uninitialized
-13:12: 'a' might be used uninitialized
+7:12: 'a' might be used uninitialized
+15:12: 'a' might be used uninitialized
 """
