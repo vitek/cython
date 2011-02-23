@@ -29,13 +29,13 @@ class ControlBlock(object):
     """
 
     def __init__(self):
-        self.stats = []
-        self.gen = {}
-        self.kill = {}
-
         self.children = set()
         self.parents = set()
         self.positions = set()
+
+        self.stats = []
+        self.gen = {}
+        self.kill = {}
 
     def empty(self):
         return (not self.stats and not self.positions)
