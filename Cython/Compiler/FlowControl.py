@@ -242,6 +242,65 @@ class GV(object):
         fp.write(' }\n')
 
 
+def check_definitions(node, flow, entry_point):
+    """Based on algo 9.11 from Dragon Book."""
+
+    for block in flow.blocks:
+        block.input = {}
+        block.output = {}
+        for entry, item in block.gen.items():
+            block.output[entry] = set([item])
+    entry_point.input = {}
+    entry_point.output = {}
+    for entry in node.local_scope.entries.values():
+        if entry.from_closure or entry.is_pyglobal or entry.is_cglobal:
+            continue
+        if entry.is_arg:
+            obj = Argument(entry)
+        else:
+            obj = Uninitialized
+        entry_point.gen[entry] = obj
+        entry_point.output[entry] = set([obj])
+    dirty = True
+    while dirty:
+        dirty = False
+        for block in flow.blocks:
+            input = {}
+            for parent in block.parents:
+                for entry, items in parent.output.items():
+                    if entry in input:
+                        input[entry].update(items)
+                    else:
+                        input[entry] = items.copy()
+            output = {}
+            for entry, items in input.items():
+                output[entry] = items.copy()
+            for entry in block.kill.keys():
+                output[entry] = set([])
+            for entry, item in block.gen.items():
+                output[entry] = set([item])
+            if output != block.output:
+                dirty = True
+            block.input = input
+            block.output = output
+    for block in flow.blocks:
+        state = {}
+        for entry, items in block.input.items():
+            state[entry] = items.copy()
+        for stat in block.stats:
+            if isinstance(stat, Assignment):
+                state[stat.entry] = set([stat])
+            elif isinstance(stat, VariableUse):
+                if stat.entry not in state:
+                    continue
+                if Uninitialized in state[stat.entry]:
+                    if len(state[stat.entry]) == 1:
+                        warning(stat.pos, "'%s' is used uninitialized" % stat.entry.name, 2)
+                    else:
+                        warning(stat.pos, "'%s' might be used uninitialized" % stat.entry.name, 2)
+                    state[stat.entry] -= set([Uninitialized])
+
+
 class CreateControlFlowGraph(CythonTransform):
     """Create NameNode use and assignment graph."""
 
@@ -265,63 +324,6 @@ class CreateControlFlowGraph(CythonTransform):
                 fp.close()
         return node
 
-    def check_definitions(self, node, flow, entry_point):
-        """Based on algo 9.11 from dragon book."""
-        for block in flow.blocks:
-            block.input = {}
-            block.output = {}
-            for entry, item in block.gen.items():
-                block.output[entry] = set([item])
-        entry_point.input = {}
-        entry_point.output = {}
-        for entry in node.local_scope.entries.values():
-            if entry.from_closure or entry.is_pyglobal or entry.is_cglobal:
-                continue
-            if entry.is_arg:
-                obj = Argument(entry)
-            else:
-                obj = Uninitialized
-            entry_point.gen[entry] = obj
-            entry_point.output[entry] = set([obj])
-        dirty = True
-        while dirty:
-            dirty = False
-            for block in flow.blocks:
-                input = {}
-                for parent in block.parents:
-                    for entry, items in parent.output.items():
-                        if entry in input:
-                            input[entry].update(items)
-                        else:
-                            input[entry] = items.copy()
-                output = {}
-                for entry, items in input.items():
-                    output[entry] = items.copy()
-                for entry in block.kill.keys():
-                    output[entry] = set([])
-                for entry, item in block.gen.items():
-                    output[entry] = set([item])
-                if output != block.output:
-                    dirty = True
-                block.input = input
-                block.output = output
-        for block in flow.blocks:
-            state = {}
-            for entry, items in block.input.items():
-                state[entry] = items.copy()
-            for stat in block.stats:
-                if isinstance(stat, Assignment):
-                    state[stat.entry] = set([stat])
-                elif isinstance(stat, VariableUse):
-                    if stat.entry not in state:
-                        continue
-                    if Uninitialized in state[stat.entry]:
-                        if len(state[stat.entry]) == 1:
-                            warning(stat.pos, "'%s' is used uninitialized" % stat.entry.name, 2)
-                        else:
-                            warning(stat.pos, "'%s' might be used uninitialized" % stat.entry.name, 2)
-                        state[stat.entry] -= set([Uninitialized])
-
     def visit_FuncDefNode(self, node):
         self.env_stack.append(self.env)
         self.env = node.local_scope
@@ -336,7 +338,7 @@ class CreateControlFlowGraph(CythonTransform):
         self.visitchildren(node)
         # Cleanup graph
         self.flow.normalize(def_block)
-        self.check_definitions(node, self.flow, def_block)
+        check_definitions(node, self.flow, def_block)
         self.flow.blocks.add(def_block)
 
         self.gv_ctx.add(GV(node.local_scope.name, self.flow))
