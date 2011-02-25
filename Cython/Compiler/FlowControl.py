@@ -65,7 +65,7 @@ class ControlBlock(object):
         self.children.add(block)
         block.parents.add(self)
 
-    def add_assignment(self, lhs, rhs, entry=None):
+    def mark_assignment(self, lhs, rhs, entry=None):
         if entry is None:
             entry = lhs.entry
         assignment = Assignment(lhs, rhs, entry)
@@ -81,10 +81,6 @@ class ControlBlock(object):
         raise NotImplementedError, "Delete is not supported yet"
         #self.stats.append(DeleteVariable(node))
         #self.gen[node.entry] = Uninitialized
-
-    def add_argument(self, node):
-        self.stats.append(Argument(node.entry))
-
 
 class ControlFlow(object):
     """Control-flow graph"""
@@ -355,6 +351,7 @@ class CreateControlFlowGraph(CythonTransform):
 
     def visit_DefNode(self, node):
         if self.flow.block:
+            self.flow.block.mark_assignment(node, object_expr, self.env.lookup(node.name))
             self.flow.block.add_assignment(node, object_expr, self.env.lookup(node.name))
         return self.visit_FuncDefNode(node)
 
@@ -369,7 +366,7 @@ class CreateControlFlowGraph(CythonTransform):
             if lhs.entry is None:
                 # TODO: This shouldn't happen...
                 return
-            self.flow.block.add_assignment(lhs, rhs)
+            self.flow.block.mark_assignment(lhs, rhs)
         elif isinstance(lhs, ExprNodes.SequenceNode):
             for arg in lhs.args:
                 self.mark_assignment(arg, internal=True)
