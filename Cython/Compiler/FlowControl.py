@@ -7,14 +7,22 @@ cython.declare(PyrexTypes=object, Naming=object, ExprNodes=object, Nodes=object,
 
 import ExprNodes
 import Nodes
+from PyrexTypes import py_object_type, unspecified_type
 
-from Cython.Compiler.Visitor import CythonTransform
-from Cython.Compiler.Errors import error, warning, CompileError, InternalError
+from Visitor import CythonTransform
+from Errors import error, warning, CompileError, InternalError
 
 try:
     set
 except NameError:
     from sets import Set as set
+
+class TypedExprNode(ExprNodes.ExprNode):
+    # Used for declaring assignments of a specified type whithout a known entry.
+    def __init__(self, type):
+        self.type = type
+
+object_expr = TypedExprNode(py_object_type)
 
 class ControlBlock(object):
     """Control flow graph node.
@@ -63,7 +71,6 @@ class ControlBlock(object):
         self.gen[lhs.entry] = assignment
 
     def add_defnode(self, node, entry):
-        from TypeInference import object_expr
         assignment = Assignment(node, object_expr)
         assignment.entry = entry
         self.stats.append(assignment)
@@ -361,7 +368,6 @@ class CreateControlFlowGraph(CythonTransform):
         if self.flow.exceptions:
             self.flow.nextblock()
         if not rhs:
-            from TypeInference import object_expr
             rhs = object_expr
         if isinstance(lhs, (ExprNodes.NameNode, Nodes.PyArgDeclNode)):
             if lhs.entry is None:
