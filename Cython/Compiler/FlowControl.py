@@ -253,14 +253,10 @@ def check_definitions(compiler_directives, node, flow, entry_point):
     entry_point.input = {}
     entry_point.output = {}
     for entry in node.local_scope.entries.values():
-        if entry.from_closure or entry.is_pyglobal or entry.is_cglobal:
+        if entry.is_arg or entry.is_pyglobal or entry.is_cglobal:
             continue
-        if entry.is_arg:
-            continue
-        else:
-            obj = Uninitialized
-        entry_point.gen[entry] = obj
-        entry_point.output[entry] = set([obj])
+        entry_point.gen[entry] = Uninitialized
+        entry_point.output[entry] = set([Uninitialized])
     dirty = True
     while dirty:
         dirty = False
@@ -294,7 +290,9 @@ def check_definitions(compiler_directives, node, flow, entry_point):
                 if stat.entry not in state:
                     continue
                 if Uninitialized in state[stat.entry]:
-                    if len(state[stat.entry]) == 1:
+                    if stat.entry.from_closure:
+                        pass # Can be uninitialized here
+                    elif len(state[stat.entry]) == 1:
                         if compiler_directives['warn.uninitialized']:
                             warning(stat.pos, "'%s' is used uninitialized" % stat.entry.name, 2)
                     else:
