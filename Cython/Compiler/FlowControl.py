@@ -65,14 +65,10 @@ class ControlBlock(object):
         self.children.add(block)
         block.parents.add(self)
 
-    def add_assignment(self, lhs, rhs):
-        assignment = Assignment(lhs, rhs)
-        self.stats.append(assignment)
-        self.gen[lhs.entry] = assignment
-
-    def add_defnode(self, node, entry):
-        assignment = Assignment(node, object_expr)
-        assignment.entry = entry
+    def add_assignment(self, lhs, rhs, entry=None):
+        if entry is None:
+            entry = lhs.entry
+        assignment = Assignment(lhs, rhs, entry)
         self.stats.append(assignment)
         self.gen[entry] = assignment
 
@@ -87,7 +83,7 @@ class ControlBlock(object):
         #self.gen[node.entry] = Uninitialized
 
     def add_argument(self, node):
-        self.stats.append(Argument(node))
+        self.stats.append(Argument(node.entry))
 
 
 class ControlFlow(object):
@@ -155,10 +151,10 @@ class ExceptionDescr(object):
 class Assignment(object):
     is_initialized = True
 
-    def __init__(self, lhs, rhs):
+    def __init__(self, lhs, rhs, entry):
         self.lhs = lhs
         self.rhs = rhs
-        self.entry = lhs.entry
+        self.entry = entry
         self.pos = lhs.pos
 
     def __repr__(self):
@@ -264,7 +260,7 @@ def check_definitions(compiler_directives, node, flow, entry_point):
         if entry.from_closure or entry.is_pyglobal or entry.is_cglobal:
             continue
         if entry.is_arg:
-            obj = Argument(entry)
+            continue
         else:
             obj = Uninitialized
         entry_point.gen[entry] = obj
@@ -359,7 +355,7 @@ class CreateControlFlowGraph(CythonTransform):
 
     def visit_DefNode(self, node):
         if self.flow.block:
-            self.flow.block.add_defnode(node, self.env.lookup(node.name))
+            self.flow.block.add_assignment(node, object_expr, self.env.lookup(node.name))
         return self.visit_FuncDefNode(node)
 
     def mark_assignment(self, lhs, rhs=None, internal=False):
@@ -405,6 +401,7 @@ class CreateControlFlowGraph(CythonTransform):
         return node
 
     def visit_PyArgDeclNode(self, node):
+        # TODO: Do something with stararg types
         if self.flow.block:
             self.flow.block.add_argument(node)
         return node

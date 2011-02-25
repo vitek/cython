@@ -48,6 +48,10 @@ def set_comp(a):
 def dict_comp(a):
     return {i: j for i, j in a}
 
+# args and kwargs
+def generic_args_call(*args, **kwargs):
+    return args, kwargs
+
 
 _ERRORS = """
 4:11: 'a' is used uninitialized
