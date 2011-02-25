@@ -352,7 +352,6 @@ class CreateControlFlowGraph(CythonTransform):
     def visit_DefNode(self, node):
         if self.flow.block:
             self.flow.block.mark_assignment(node, object_expr, self.env.lookup(node.name))
-            self.flow.block.add_assignment(node, object_expr, self.env.lookup(node.name))
         return self.visit_FuncDefNode(node)
 
     def mark_assignment(self, lhs, rhs=None, internal=False):
@@ -394,13 +393,15 @@ class CreateControlFlowGraph(CythonTransform):
 
     def visit_CArgDeclNode(self, node):
         if self.flow.block:
-            self.flow.block.add_argument(node)
+            entry = self.env.lookup(node.name)
+            self.flow.block.mark_assignment(node, TypedExprNode(entry.type), entry)
         return node
 
     def visit_PyArgDeclNode(self, node):
         # TODO: Do something with stararg types
         if self.flow.block:
-            self.flow.block.add_argument(node)
+            entry = self.env.lookup(node.name)
+            self.flow.block.mark_assignment(node, object_expr, entry)
         return node
 
     def visit_NameNode(self, node):
