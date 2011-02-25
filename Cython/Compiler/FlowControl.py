@@ -658,3 +658,15 @@ class CreateControlFlowGraph(CythonTransform):
         if node.expr_scope:
             self.env = self.env_stack.pop()
         return node
+
+    def visit_PyClassDefNode(self, node):
+        if self.flow.block:
+            self.flow.block.mark_assignment(node, object_expr, self.env.lookup(node.name))
+        return node
+        # TODO: handle class scope
+        ## self.env_stack.append(self.env)
+        ## self.env = node.scope
+        ## self.flow.nextblock()
+        ## self.visitchildren(node)
+        ## self.env = self.env_stack.pop()
+        ## return node
