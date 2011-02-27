@@ -57,30 +57,9 @@ class ControlBlock(object):
         self.parents.clear()
         self.children.clear()
 
-    def mark_position(self, node):
-        """Mark position, will be used to draw graph nodes."""
-        self.positions.add(node.pos[:2])
-
     def add_child(self, block):
         self.children.add(block)
         block.parents.add(self)
-
-    def mark_assignment(self, lhs, rhs, entry=None):
-        if entry is None:
-            entry = lhs.entry
-        assignment = Assignment(lhs, rhs, entry)
-        self.stats.append(assignment)
-        self.gen[entry] = assignment
-
-    def add_name_node(self, node, entry):
-        self.stats.append(VariableUse(node, entry))
-        # Local variable is definitily bound after this block
-        self.kill[node.entry] = Uninitialized
-
-    def add_del(self, node):
-        raise NotImplementedError, "Delete is not supported yet"
-        #self.stats.append(DeleteVariable(node))
-        #self.gen[node.entry] = Uninitialized
 
 class ControlFlow(object):
     """Control-flow graph"""
@@ -89,12 +68,14 @@ class ControlFlow(object):
         self.loops = []
         self.exceptions = []
         self.blocks = set()
-        self.block = None # Current block
 
-    def newblock(self, parent=None, attach=True):
+        self.entry_point = ControlBlock()
+        # Current block
+        self.block = self.entry_point
+
+    def newblock(self, parent=None):
         block = ControlBlock()
-        if attach:
-            self.blocks.add(block)
+        self.blocks.add(block)
         if parent:
             parent.add_child(block)
         return block
@@ -109,6 +90,29 @@ class ControlFlow(object):
             self.block.add_child(block)
         self.block = block
         return self.block
+
+    def mark_position(self, node):
+        """Mark position, will be used to draw graph nodes."""
+        if self.block:
+            self.block.positions.add(node.pos[:2])
+
+    def mark_assignment(self, lhs, rhs, entry=None):
+        if self.block:
+            if entry is None:
+                entry = lhs.entry
+            assignment = Assignment(lhs, rhs, entry)
+            self.block.stats.append(assignment)
+            self.block.gen[entry] = assignment
+
+    def mark_reference(self, node, entry):
+        """Mark variable reference."""
+        if self.block:
+            self.block.stats.append(VariableUse(node, entry))
+            # Local variable is definitily bound after this block
+            self.block.kill[node.entry] = Uninitialized
+
+    ## def add_del(self, node):
+    ##     raise NotImplementedError, "Delete is not supported yet"
 
     def normalize(self, root):
         """Delete unreachable and orphan blocks."""
@@ -311,7 +315,6 @@ class CreateControlFlowGraph(CythonTransform):
         self.env = node.scope
         self.stack = []
         self.flow = ControlFlow()
-        self.flow.nextblock()
         self.visitchildren(node)
 
         dot_output = self.current_directives['control_flow.dot_output']
@@ -330,16 +333,14 @@ class CreateControlFlowGraph(CythonTransform):
         self.stack.append(self.flow)
         self.flow = ControlFlow()
 
-        # Enter block
-        def_block = self.flow.newblock(attach=False)
-        def_block.mark_position(node)
+        self.flow.mark_position(node)
         # Function body block
-        self.flow.nextblock(def_block)
+        self.flow.nextblock()
         self.visitchildren(node)
         # Cleanup graph
-        self.flow.normalize(def_block)
-        check_definitions(self.current_directives, node, self.flow, def_block)
-        self.flow.blocks.add(def_block)
+        self.flow.normalize(self.flow.entry_point)
+        check_definitions(self.current_directives, node, self.flow, self.flow.entry_point)
+        self.flow.blocks.add(self.flow.entry_point)
 
         self.gv_ctx.add(GV(node.local_scope.name, self.flow))
 
@@ -348,8 +349,7 @@ class CreateControlFlowGraph(CythonTransform):
         return node
 
     def visit_DefNode(self, node):
-        if self.flow.block:
-            self.flow.block.mark_assignment(node, object_expr, self.env.lookup(node.name))
+        self.flow.mark_assignment(node, object_expr, self.env.lookup(node.name))
         return self.visit_FuncDefNode(node)
 
     def mark_assignment(self, lhs, rhs=None, internal=False):
@@ -363,7 +363,7 @@ class CreateControlFlowGraph(CythonTransform):
             if lhs.entry is None:
                 # TODO: This shouldn't happen...
                 return
-            self.flow.block.mark_assignment(lhs, rhs)
+            self.flow.mark_assignment(lhs, rhs)
         elif isinstance(lhs, ExprNodes.SequenceNode):
             for arg in lhs.args:
                 self.mark_assignment(arg, internal=True)
@@ -390,24 +390,22 @@ class CreateControlFlowGraph(CythonTransform):
         return node
 
     def visit_CArgDeclNode(self, node):
-        if self.flow.block:
-            if hasattr(node, 'name'): # XXX
-                entry = self.env.lookup(node.name)
-                self.flow.block.mark_assignment(node, TypedExprNode(entry.type), entry)
+        if hasattr(node, 'name'): # XXX
+            entry = self.env.lookup(node.name)
+            self.flow.mark_assignment(node, TypedExprNode(entry.type), entry)
         return node
 
     def visit_PyArgDeclNode(self, node):
         # TODO: Do something with stararg types
-        if self.flow.block:
-            entry = self.env.lookup(node.name)
-            self.flow.block.mark_assignment(node, object_expr, entry)
+        entry = self.env.lookup(node.name)
+        self.flow.mark_assignment(node, object_expr, entry)
         return node
 
     def visit_NameNode(self, node):
         if self.flow.block:
             entry = node.entry or self.env.lookup(node.name)
             if entry:
-                self.flow.block.add_name_node(node, entry)
+                self.flow.mark_reference(node, entry)
         return node
 
     def visit_StatListNode(self, node):
@@ -419,8 +417,7 @@ class CreateControlFlowGraph(CythonTransform):
 
     def visit_Node(self, node):
         self.visitchildren(node)
-        if self.flow.block:
-            self.flow.block.mark_position(node)
+        self.flow.mark_position(node)
         return node
 
     def visit_IfStatNode(self, node):
@@ -616,21 +613,21 @@ class CreateControlFlowGraph(CythonTransform):
         return node
 
     def visit_RaiseStatNode(self, node):
-        self.flow.block.mark_position(node)
+        self.flow.mark_position(node)
         if self.flow.exceptions:
             self.flow.block.add_child(self.flow.exceptions[-1].entry_point)
         self.flow.block = None
         return node
 
     def visit_ReraiseStatNode(self, node):
-        self.flow.block.mark_position(node)
+        self.flow.mark_position(node)
         if self.flow.exceptions:
             self.flow.block.add_child(self.flow.exceptions[-1].entry_point)
         self.flow.block = None
         return node
 
     def visit_ReturnStatNode(self, node):
-        self.flow.block.mark_position(node)
+        self.flow.mark_position(node)
         self.visitchildren(node)
 
         for exception in self.flow.exceptions[::-1]:
@@ -648,7 +645,7 @@ class CreateControlFlowGraph(CythonTransform):
             error(node.pos, "break statement not inside loop")
             return node
         loop = self.flow.loops[-1]
-        self.flow.block.mark_position(node)
+        self.flow.mark_position(node)
         for exception in self.flow.exceptions[::-1]:
             if exception.finally_point:
                 self.flow.block.add_child(exception.finally_point)
@@ -665,7 +662,7 @@ class CreateControlFlowGraph(CythonTransform):
             error(node.pos, "continue statement not inside loop")
             return node
         loop = self.flow.loops[-1]
-        self.flow.block.mark_position(node)
+        self.flow.mark_position(node)
         for exception in self.flow.exceptions[::-1]:
             if exception.finally_point:
                 self.flow.block.add_child(exception.finally_point)
@@ -688,13 +685,12 @@ class CreateControlFlowGraph(CythonTransform):
         return node
 
     def visit_PyClassDefNode(self, node):
-        if self.flow.block:
-            self.flow.block.mark_assignment(node, object_expr, self.env.lookup(node.name))
-        return node
-        # TODO: handle class scope
+        self.flow.mark_assignment(node, object_expr, self.env.lookup(node.name))
+        # TODO: add negative attribute list to "visitchildren"?
+        self.visitchildren(node, attrs=['dict', 'metaclass', 'mkw', 'bases', 'classobj', 'target'])
         ## self.env_stack.append(self.env)
         ## self.env = node.scope
         ## self.flow.nextblock()
-        ## self.visitchildren(node)
+        ## self.visitchildren(node, attrs=['body'])
         ## self.env = self.env_stack.pop()
-        ## return node
+        return node
