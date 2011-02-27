@@ -67,6 +67,7 @@ class ControlFlow(object):
         self.branches = []
         self.loops = []
         self.exceptions = []
+        self.entries = set()
         self.blocks = set()
 
         self.entry_point = ControlBlock()
@@ -103,6 +104,7 @@ class ControlFlow(object):
             assignment = Assignment(lhs, rhs, entry)
             self.block.stats.append(assignment)
             self.block.gen[entry] = assignment
+            self.entries.add(entry)
 
     def mark_reference(self, node, entry):
         """Mark variable reference."""
@@ -110,6 +112,7 @@ class ControlFlow(object):
             self.block.stats.append(VariableUse(node, entry))
             # Local variable is definitily bound after this block
             self.block.kill[node.entry] = Uninitialized
+            self.entries.add(entry)
 
     ## def add_del(self, node):
     ##     raise NotImplementedError, "Delete is not supported yet"
