@@ -391,8 +391,9 @@ class CreateControlFlowGraph(CythonTransform):
 
     def visit_CArgDeclNode(self, node):
         if self.flow.block:
-            entry = self.env.lookup(node.name)
-            self.flow.block.mark_assignment(node, TypedExprNode(entry.type), entry)
+            if hasattr(node, 'name'): # XXX
+                entry = self.env.lookup(node.name)
+                self.flow.block.mark_assignment(node, TypedExprNode(entry.type), entry)
         return node
 
     def visit_PyArgDeclNode(self, node):
