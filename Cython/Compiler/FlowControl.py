@@ -501,7 +501,34 @@ class CreateControlFlowGraph(CythonTransform):
         return node
 
     def visit_ForFromStatNode(self, node):
-        raise InternalError, "for-from statement is not supported now"
+        condition_block = self.flow.nextblock()
+        next_block = self.flow.newblock()
+        # Condition with iterator
+        self.flow.loops.append(LoopDescr(next_block, condition_block))
+        self.visit(node.bound1)
+        self.visit(node.bound2)
+        if node.step:
+            self.visit(node.step)
+        # Target assignment
+        self.flow.nextblock()
+        self.mark_assignment(node.target)
+        # Body block
+        self.flow.nextblock()
+        self.visit(node.body)
+        # Loop it
+        if self.flow.block:
+            self.flow.block.add_child(condition_block)
+        # Else clause
+        if node.else_clause:
+            self.flow.nextblock(parent=condition_block)
+            self.visit(node.else_clause)
+            if self.flow.block:
+                self.flow.block.add_child(next_block)
+        else:
+            condition_block.add_child(next_block)
+        self.flow.loops.pop()
+        self.flow.block = next_block
+        return node
 
     def visit_LoopNode(self, node):
         raise InternalError, "Generic loops are not supported"
