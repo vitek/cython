@@ -19,9 +19,6 @@ genexpr_iterable_lookup_T600
 for_from_pyvar_loop_T601
 decorators_T593
 
-# Control-flow bugs
-w_uninitialized_class
-
 # CPython regression tests that don't current work:
 pyregr.test_threadsignals
 pyregr.test_module

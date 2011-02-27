@@ -260,7 +260,7 @@ def check_definitions(flow, compiler_directives):
     entry_point.input = {}
     entry_point.output = {}
     for entry in flow.entries:
-        if entry.is_arg or entry.is_pyglobal or entry.is_cglobal:
+        if entry.is_arg or not (entry.is_local or entry.is_pyclass_attr):
             continue
         entry_point.gen[entry] = Uninitialized
         entry_point.output[entry] = set([Uninitialized])
@@ -691,9 +691,10 @@ class CreateControlFlowGraph(CythonTransform):
         self.flow.mark_assignment(node, object_expr, self.env.lookup(node.name))
         # TODO: add negative attribute list to "visitchildren"?
         self.visitchildren(node, attrs=['dict', 'metaclass', 'mkw', 'bases', 'classobj', 'target'])
-        ## self.env_stack.append(self.env)
-        ## self.env = node.scope
-        ## self.flow.nextblock()
-        ## self.visitchildren(node, attrs=['body'])
-        ## self.env = self.env_stack.pop()
+        self.env_stack.append(self.env)
+        self.env = node.scope
+        self.flow.nextblock()
+        self.visitchildren(node, attrs=['body'])
+        self.flow.nextblock()
+        self.env = self.env_stack.pop()
         return node
