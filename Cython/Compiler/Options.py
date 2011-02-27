@@ -99,6 +99,12 @@ directive_defaults = {
     'binding': False,
 }
 
+# Extra warning directives
+extra_warnings = {
+    'warn.uninitialized': True,
+    'warn.maybe_uninitialized': True,
+}
+
 # Override types possibilities above, if needed
 directive_types = {
     'final' : bool,  # final cdef classes and methods

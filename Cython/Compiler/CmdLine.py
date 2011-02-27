@@ -136,8 +136,7 @@ def parse_command_line(args):
             elif option in ('-Werror', '--warning-errors'):
                 Options.warning_errors = True
             elif option == '-Wextra':
-                options.compiler_directives['warn.uninitialized'] = True
-                options.compiler_directives['warn.maybe_uninitialized'] = True
+                options.compiler_directives.update(Options.extra_warnings)
             elif option == "--disable-function-redefinition":
                 Options.disable_function_redefinition = True
             elif option in ("-X", "--directive"):
