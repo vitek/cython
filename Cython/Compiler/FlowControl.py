@@ -249,9 +249,9 @@ class GV(object):
         fp.write(' }\n')
 
 
-def check_definitions(compiler_directives, node, flow, entry_point):
+def check_definitions(flow, compiler_directives):
     """Based on algo 9.11 from Dragon Book."""
-
+    entry_point = flow.entry_point
     for block in flow.blocks:
         block.input = {}
         block.output = {}
@@ -259,7 +259,7 @@ def check_definitions(compiler_directives, node, flow, entry_point):
             block.output[entry] = set([item])
     entry_point.input = {}
     entry_point.output = {}
-    for entry in node.local_scope.entries.values():
+    for entry in flow.entries:
         if entry.is_arg or entry.is_pyglobal or entry.is_cglobal:
             continue
         entry_point.gen[entry] = Uninitialized
@@ -342,7 +342,7 @@ class CreateControlFlowGraph(CythonTransform):
         self.visitchildren(node)
         # Cleanup graph
         self.flow.normalize(self.flow.entry_point)
-        check_definitions(self.current_directives, node, self.flow, self.flow.entry_point)
+        check_definitions(self.flow, self.current_directives)
         self.flow.blocks.add(self.flow.entry_point)
 
         self.gv_ctx.add(GV(node.local_scope.name, self.flow))
