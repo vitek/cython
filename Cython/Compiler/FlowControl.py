@@ -117,9 +117,9 @@ class ControlFlow(object):
     ## def add_del(self, node):
     ##     raise NotImplementedError, "Delete is not supported yet"
 
-    def normalize(self, root):
+    def normalize(self):
         """Delete unreachable and orphan blocks."""
-        queue = set([root])
+        queue = set([self.entry_point])
         visited = set()
         while queue:
             root = queue.pop()
@@ -130,6 +130,7 @@ class ControlFlow(object):
         unreachable = self.blocks - visited
         for block in unreachable:
             block.detach()
+        visited.remove(self.entry_point)
         for block in visited:
             if block.empty():
                 for parent in block.parents: # Re-parent
@@ -341,7 +342,7 @@ class CreateControlFlowGraph(CythonTransform):
         self.flow.nextblock()
         self.visitchildren(node)
         # Cleanup graph
-        self.flow.normalize(self.flow.entry_point)
+        self.flow.normalize()
         check_definitions(self.flow, self.current_directives)
         self.flow.blocks.add(self.flow.entry_point)
 
