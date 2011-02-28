@@ -336,7 +336,7 @@ class CreateControlFlowGraph(CythonTransform):
         self.stack.append(self.flow)
         self.flow = ControlFlow()
 
-        self.flow.mark_position(node)
+        self.mark_position(node)
         # Function body block
         self.flow.nextblock()
         self.visitchildren(node)
@@ -373,6 +373,11 @@ class CreateControlFlowGraph(CythonTransform):
         else:
             # Could use this info to infer cdef class attributes...
             pass
+
+    def mark_position(self, node):
+        """Mark position if DOT output is enabled."""
+        if self.current_directives['control_flow.dot_output']:
+            self.flow.mark_position(node)
 
     def visit_FromImportStatNode(self, node):
         for name, target in node.items:
@@ -420,7 +425,7 @@ class CreateControlFlowGraph(CythonTransform):
 
     def visit_Node(self, node):
         self.visitchildren(node)
-        self.flow.mark_position(node)
+        self.mark_position(node)
         return node
 
     def visit_IfStatNode(self, node):
@@ -616,21 +621,21 @@ class CreateControlFlowGraph(CythonTransform):
         return node
 
     def visit_RaiseStatNode(self, node):
-        self.flow.mark_position(node)
+        self.mark_position(node)
         if self.flow.exceptions:
             self.flow.block.add_child(self.flow.exceptions[-1].entry_point)
         self.flow.block = None
         return node
 
     def visit_ReraiseStatNode(self, node):
-        self.flow.mark_position(node)
+        self.mark_position(node)
         if self.flow.exceptions:
             self.flow.block.add_child(self.flow.exceptions[-1].entry_point)
         self.flow.block = None
         return node
 
     def visit_ReturnStatNode(self, node):
-        self.flow.mark_position(node)
+        self.mark_position(node)
         self.visitchildren(node)
 
         for exception in self.flow.exceptions[::-1]:
@@ -648,7 +653,7 @@ class CreateControlFlowGraph(CythonTransform):
             error(node.pos, "break statement not inside loop")
             return node
         loop = self.flow.loops[-1]
-        self.flow.mark_position(node)
+        self.mark_position(node)
         for exception in self.flow.exceptions[::-1]:
             if exception.finally_point:
                 self.flow.block.add_child(exception.finally_point)
@@ -665,7 +670,7 @@ class CreateControlFlowGraph(CythonTransform):
             error(node.pos, "continue statement not inside loop")
             return node
         loop = self.flow.loops[-1]
-        self.flow.mark_position(node)
+        self.mark_position(node)
         for exception in self.flow.exceptions[::-1]:
             if exception.finally_point:
                 self.flow.block.add_child(exception.finally_point)
