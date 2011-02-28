@@ -145,7 +145,8 @@ class RemoveUnreachableCode(CythonTransform):
             idx += 1
             if stat.is_terminator:
                 if idx < len(node.stats):
-                    warning(node.stats[idx].pos, "Unreachable code", 2)
+                    if self.current_directives['warn.unreachable']:
+                        warning(node.stats[idx].pos, "Unreachable code", 2)
                     node.stats = node.stats[:idx]
                 node.is_terminator = True
                 break

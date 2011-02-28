@@ -86,6 +86,7 @@ directive_defaults = {
     'warn.undeclared': False,
     'warn.uninitialized': True,
     'warn.maybe_uninitialized': False,
+    'warn.unreachable': True,
 
 # control flow
     'control_flow.dot_output': "", # Graphviz output filename
@@ -103,6 +104,7 @@ directive_defaults = {
 extra_warnings = {
     'warn.uninitialized': True,
     'warn.maybe_uninitialized': True,
+    'warn.unreachable': True,
 }
 
 # Override types possibilities above, if needed
