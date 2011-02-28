@@ -1,4 +1,4 @@
-
+# cython: remove_unreachable=False
 def _runtime_True():
     return True
 

@@ -88,6 +88,9 @@ directive_defaults = {
     'warn.maybe_uninitialized': False,
     'warn.unreachable': True,
 
+# remove unreachable code
+    'remove_unreachable': True,
+
 # control flow
     'control_flow.dot_output': "", # Graphviz output filename
     'control_flow.dot_annotate_defs': False, # Annotate definitions

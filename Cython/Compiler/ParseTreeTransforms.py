@@ -140,6 +140,8 @@ class RemoveUnreachableCode(CythonTransform):
         return node
 
     def visit_StatListNode(self, node):
+        if not self.current_directives['remove_unreachable']:
+            return node
         self.visitchildren(node)
         for idx, stat in enumerate(node.stats):
             idx += 1
