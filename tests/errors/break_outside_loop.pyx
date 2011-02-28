@@ -1,4 +1,4 @@
-
+# cython: remove_unreachable=False
 break
 
 class A:

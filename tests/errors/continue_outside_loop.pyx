@@ -1,4 +1,4 @@
-
+# cython: remove_unreachable=False
 continue
 
 class A:
