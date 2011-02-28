@@ -160,6 +160,7 @@ class Assignment(object):
         self.rhs = rhs
         self.entry = entry
         self.pos = lhs.pos
+        self.refs = set()
 
     def __repr__(self):
         return '%s(entry=%r)' % (self.__class__.__name__, self.entry)
@@ -252,6 +253,7 @@ class GV(object):
 
 def check_definitions(flow, compiler_directives):
     """Based on algo 9.11 from Dragon Book."""
+    tracked = set()
     entry_point = flow.entry_point
     for block in flow.blocks:
         block.input = {}
@@ -261,10 +263,13 @@ def check_definitions(flow, compiler_directives):
     entry_point.input = {}
     entry_point.output = {}
     for entry in flow.entries:
-        if entry.is_arg or not (entry.is_local or entry.is_pyclass_attr):
+        if not (entry.is_local or entry.is_pyclass_attr or entry.is_arg):
             continue
-        entry_point.gen[entry] = Uninitialized
-        entry_point.output[entry] = set([Uninitialized])
+        tracked.add(entry)
+        if not entry.is_arg:
+            entry_point.gen[entry] = Uninitialized
+            entry_point.output[entry] = set([Uninitialized])
+    # Reaching definitons for blocks
     dirty = True
     while dirty:
         dirty = False
@@ -287,6 +292,9 @@ def check_definitions(flow, compiler_directives):
                 dirty = True
             block.input = input
             block.output = output
+    # Track down state
+    warnings = []
+    assignments = set()
     for block in flow.blocks:
         state = {}
         for entry, items in block.input.items():
@@ -294,7 +302,11 @@ def check_definitions(flow, compiler_directives):
         for stat in block.stats:
             if isinstance(stat, Assignment):
                 state[stat.entry] = set([stat])
+                if stat.entry in tracked:
+                    assignments.add(stat)
             elif isinstance(stat, VariableUse):
+                if stat.entry in tracked:
+                    stat.entry.references.append(stat)
                 if stat.entry not in state:
                     continue
                 if Uninitialized in state[stat.entry]:
@@ -302,12 +314,34 @@ def check_definitions(flow, compiler_directives):
                         pass # Can be uninitialized here
                     elif len(state[stat.entry]) == 1:
                         if compiler_directives['warn.uninitialized']:
-                            warning(stat.pos, "'%s' is used uninitialized" % stat.entry.name, 2)
+                            warnings.append((stat.pos, "'%s' is used uninitialized" % stat.entry.name))
                     else:
                         if compiler_directives['warn.maybe_uninitialized']:
-                            warning(stat.pos, "'%s' might be used uninitialized" % stat.entry.name, 2)
+                            warnings.append((stat.pos, "'%s' might be used uninitialized" % stat.entry.name))
                     state[stat.entry] -= set([Uninitialized])
-
+                for assmt in state[stat.entry]:
+                    assmt.refs.add(stat)
+    # Check variable usage
+    warn_unused_result = compiler_directives['warn.unused_result']
+    warn_unused = compiler_directives['warn.unused']
+    warn_unused_arg = compiler_directives['warn.unused_arg']
+    if warn_unused_result:
+        for assmt in assignments:
+            if not assmt.refs and assmt.entry.references:
+                warnings.append((assmt.pos, "Unused result in '%s'" % assmt.entry.name))
+    if warn_unused or warn_unused_arg:
+        for entry in tracked:
+            if not entry.references:
+                if entry.is_arg:
+                    if warn_unused_arg:
+                        warnings.append((entry.pos, "Unused argument '%s'" % entry.name))
+                else:
+                    if warn_unused:
+                        warnings.append((entry.pos, "Unused entry '%s'" % entry.name))
+    # Sort warnings by position
+    warnings.sort(key=lambda w: w[0])
+    for pos, message in warnings:
+        warning(pos, message, 2)
 
 class CreateControlFlowGraph(CythonTransform):
     """Create NameNode use and assignment graph."""

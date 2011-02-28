@@ -87,6 +87,9 @@ directive_defaults = {
     'warn.uninitialized': True,
     'warn.maybe_uninitialized': False,
     'warn.unreachable': True,
+    'warn.unused': False,
+    'warn.unused_arg': False,
+    'warn.unused_result': False,
 
 # remove unreachable code
     'remove_unreachable': True,
@@ -108,6 +111,7 @@ extra_warnings = {
     'warn.uninitialized': True,
     'warn.maybe_uninitialized': True,
     'warn.unreachable': True,
+    'warn.unused': True,
 }
 
 # Override types possibilities above, if needed
