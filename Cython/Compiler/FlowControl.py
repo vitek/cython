@@ -327,11 +327,11 @@ def check_definitions(flow, compiler_directives):
     warn_unused_arg = compiler_directives['warn.unused_arg']
     if warn_unused_result:
         for assmt in assignments:
-            if not assmt.refs and assmt.entry.references:
+            if not assmt.refs and assmt.entry.references and not assmt.entry.is_pyclass_attr:
                 warnings.append((assmt.pos, "Unused result in '%s'" % assmt.entry.name))
     if warn_unused or warn_unused_arg:
         for entry in tracked:
-            if not entry.references:
+            if not entry.references and not assmt.entry.is_pyclass_attr:
                 if entry.is_arg:
                     if warn_unused_arg:
                         warnings.append((entry.pos, "Unused argument '%s'" % entry.name))
