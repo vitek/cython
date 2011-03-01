@@ -18,6 +18,7 @@ def unused_result():
 def used(x, y):
     x.y = 1
     y[0] = 1
+    lambda x: x
 
 _ERRORS = """
 3:6: Unused entry 'a'

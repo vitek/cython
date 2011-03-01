@@ -101,6 +101,8 @@ class ControlFlow(object):
         if self.block:
             if entry is None:
                 entry = lhs.entry
+            if entry.is_anonymous:
+                return
             assignment = Assignment(lhs, rhs, entry)
             self.block.stats.append(assignment)
             self.block.gen[entry] = assignment
