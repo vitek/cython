@@ -911,8 +911,8 @@ class WithTransform(CythonTransform, SkipDeclarations):
         MGR.__enter__()
         EXC = True
         try:
+            EXCINFO = None
             try:
-                EXCINFO = None
                 BODY
             except:
                 EXC = False
@@ -930,8 +930,8 @@ class WithTransform(CythonTransform, SkipDeclarations):
         VALUE = MGR.__enter__()
         EXC = True
         try:
+            EXCINFO = None
             try:
-                EXCINFO = None
                 TARGET = VALUE
                 BODY
             except:

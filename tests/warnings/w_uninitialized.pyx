@@ -52,6 +52,11 @@ def dict_comp(a):
 def generic_args_call(*args, **kwargs):
     return args, kwargs
 
+def withctx(ctx):
+    with ctx:
+        pass
+    with ctx as foo:
+        print(foo)
 
 _ERRORS = """
 4:11: 'a' is used uninitialized
