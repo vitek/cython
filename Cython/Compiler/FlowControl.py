@@ -358,8 +358,8 @@ class CreateControlFlowGraph(CythonTransform):
         dot_output = self.current_directives['control_flow.dot_output']
         if dot_output:
             annotate_defs = self.current_directives['control_flow.dot_annotate_defs']
+            fp = open(dot_output, 'wt')
             try:
-                fp = open(dot_output, 'wt')
                 self.gv_ctx.render(fp, 'module', annotate_defs=annotate_defs)
             finally:
                 fp.close()
