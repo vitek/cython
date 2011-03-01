@@ -390,7 +390,7 @@ class CreateControlFlowGraph(CythonTransform):
         self.flow.mark_assignment(node, object_expr, self.env.lookup(node.name))
         return self.visit_FuncDefNode(node)
 
-    def mark_assignment(self, lhs, rhs=None, internal=False):
+    def mark_assignment(self, lhs, rhs=None):
         if not self.flow.block:
             return
         if self.flow.exceptions:
@@ -409,7 +409,7 @@ class CreateControlFlowGraph(CythonTransform):
             self.flow.mark_assignment(lhs, rhs)
         elif isinstance(lhs, ExprNodes.SequenceNode):
             for arg in lhs.args:
-                self.mark_assignment(arg, internal=True)
+                self.mark_assignment(arg)
         else:
             # Could use this info to infer cdef class attributes...
             pass
