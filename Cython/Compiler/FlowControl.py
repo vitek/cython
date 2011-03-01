@@ -396,8 +396,8 @@ class CreateControlFlowGraph(CythonTransform):
         if self.flow.exceptions:
             self.flow.nextblock()
 
-        if isinstance(lhs, ExprNodes.AttributeNode):
-            self.visit_NameNode(lhs.obj)
+        if isinstance(lhs, (ExprNodes.AttributeNode, ExprNodes.IndexNode)):
+            self.visit(lhs)
             return
 
         if not rhs:
@@ -450,7 +450,6 @@ class CreateControlFlowGraph(CythonTransform):
         return node
 
     def visit_NameNode(self, node):
-        self.visitchildren(node)
         if self.flow.block:
             entry = node.entry or self.env.lookup(node.name)
             if entry:
