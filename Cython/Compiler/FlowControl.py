@@ -108,6 +108,13 @@ class ControlFlow(object):
             self.block.gen[entry] = assignment
             self.entries.add(entry)
 
+    def mark_argument(self, lhs, rhs, entry):
+        if self.block:
+            assignment = Argument(lhs, rhs, entry)
+            self.block.stats.append(assignment)
+            self.block.gen[entry] = assignment
+            self.entries.add(entry)
+
     def mark_reference(self, node, entry):
         """Mark variable reference."""
         if self.block:
@@ -155,7 +162,7 @@ class ExceptionDescr(object):
         self.finally_end = finally_end
 
 class Assignment(object):
-    is_initialized = True
+    is_arg = False
 
     def __init__(self, lhs, rhs, entry):
         self.lhs = lhs
@@ -171,9 +178,7 @@ class Uninitialized(object):
     is_initialized = False
 
 class Argument(Assignment):
-    def __init__(self, entry):
-        self.entry = entry
-        self.pos = None
+    is_arg = True
 
 class VariableUse(object):
     def __init__(self, node, entry):
@@ -442,13 +447,13 @@ class CreateControlFlowGraph(CythonTransform):
     def visit_CArgDeclNode(self, node):
         if hasattr(node, 'name'): # XXX
             entry = self.env.lookup(node.name)
-            self.flow.mark_assignment(node, TypedExprNode(entry.type), entry)
+            self.flow.mark_argument(node, TypedExprNode(entry.type), entry)
         return node
 
     def visit_PyArgDeclNode(self, node):
         # TODO: Do something with stararg types
         entry = self.env.lookup(node.name)
-        self.flow.mark_assignment(node, object_expr, entry)
+        self.flow.mark_argument(node, object_expr, entry)
         return node
 
     def visit_NameNode(self, node):
