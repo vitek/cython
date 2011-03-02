@@ -454,6 +454,13 @@ class CreateControlFlowGraph(CythonTransform):
             self.mark_assignment(lhs, node.rhs)
         return node
 
+    def visit_ParallelAssignmentNode(self, node):
+        for stat in node.stats:
+            self.visit(stat.rhs)
+        for stat in node.stats:
+            self.mark_assignment(stat.lhs, stat.rhs)
+        return node
+
     def visit_CArgDeclNode(self, node):
         if hasattr(node, 'name'): # XXX
             entry = self.env.lookup(node.name)
