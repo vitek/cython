@@ -643,6 +643,7 @@ class CArgDeclNode(Node):
     # is_self_arg    boolean            Is the "self" arg of an extension type method
     # is_type_arg    boolean            Is the "class" arg of an extension type classmethod
     # is_kw_only     boolean            Is a keyword-only argument
+    # used           boolean            Is argument used
 
     child_attrs = ["base_type", "declarator", "default"]
 
@@ -656,6 +657,7 @@ class CArgDeclNode(Node):
     name_declarator = None
     default_value = None
     annotation = None
+    used = True
 
     def analyse(self, env, nonempty = 0, is_self_arg = False):
         if is_self_arg:
@@ -1866,6 +1868,7 @@ class PyArgDeclNode(Node):
     # entry       Symtab.Entry
     # annotation  ExprNode or None   Py3 argument annotation
     child_attrs = []
+    used = True
 
     def generate_function_definitions(self, env, code):
         self.entry.generate_function_definitions(env, code)

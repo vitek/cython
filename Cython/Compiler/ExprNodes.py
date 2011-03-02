@@ -1276,6 +1276,7 @@ class NameNode(AtomicExprNode):
     cython_attribute = None
     lhs_of_first_assignment = False
     is_used_as_rvalue = 0
+    used = True
     entry = None
     type_entry = None
 
