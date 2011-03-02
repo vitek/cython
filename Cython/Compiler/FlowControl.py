@@ -381,6 +381,16 @@ class CreateControlFlowGraph(CythonTransform):
         self.mark_position(node)
         # Function body block
         self.flow.nextblock()
+
+        if node.star_arg:
+            self.flow.mark_argument(node.star_arg,
+                                    TypedExprNode(Builtin.tuple_type),
+                                    node.star_arg.entry)
+        if node.starstar_arg:
+            self.flow.mark_argument(node.starstar_arg,
+                                    TypedExprNode(Builtin.dict_type),
+                                    node.starstar_arg.entry)
+
         self.visitchildren(node)
         # Cleanup graph
         self.flow.normalize()
