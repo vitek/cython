@@ -2831,6 +2831,8 @@ class DefNode(FuncDefNode):
         # declared type, if needed.  Also copies signature arguments
         # into closure fields.
         for arg in self.args:
+            if not arg.entry.used:
+                continue
             if arg.needs_conversion:
                 self.generate_arg_conversion(arg, code)
             elif arg.entry.in_closure:
@@ -4543,8 +4545,9 @@ class ForFromStatNode(LoopNode, StatNode):
             self.py_loopvar_node.generate_evaluation_code(code)
             self.target.generate_assignment_code(self.py_loopvar_node, code)
         elif from_range:
-            code.putln("%s = %s;" % (
-                            self.target.result(), loopvar_name))
+            if not self.target.is_name or self.target.used:
+                code.putln("%s = %s;" % (
+                    self.target.result(), loopvar_name))
         self.body.generate_execution_code(code)
         code.put_label(code.continue_label)
         if self.py_loopvar_node:
