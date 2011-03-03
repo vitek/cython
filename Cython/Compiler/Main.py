@@ -148,10 +148,10 @@ class Context(object):
             AutoTestDictTransform(self),
             EmbedSignature(self),
             EarlyReplaceBuiltinCalls(self),  ## Necessary?
+            TransformBuiltinMethods(self),  ## Necessary?
             CreateControlFlowGraph(self),
             MarkAssignments(self),
             MarkOverflowingArithmetic(self),
-            TransformBuiltinMethods(self),  ## Necessary?
             IntroduceBufferAuxiliaryVars(self),
             _check_c_declarations,
             AnalyseExpressionsTransform(self),
