@@ -9,7 +9,7 @@ import ExprNodes
 import Nodes
 from PyrexTypes import py_object_type, unspecified_type
 
-from Visitor import CythonTransform
+from Visitor import TreeVisitor, CythonTransform
 from Errors import error, warning, CompileError, InternalError
 
 try:
@@ -350,6 +350,22 @@ def check_definitions(flow, compiler_directives):
     for pos, message in warnings:
         warning(pos, message, 2)
 
+
+class AssignmentCollector(TreeVisitor):
+    def __init__(self):
+        super(AssignmentCollector, self).__init__()
+        self.assignments = []
+
+    def visit_Node(self):
+        self.visitchildren(self)
+
+    def visit_SingleAssignmentNode(self, node):
+        self.assignments.append((node.lhs, node.rhs))
+
+    def visit_CascadedAssignmentNode(self, node):
+        for lhs in node.lhs_list:
+            self.assignments.append((lhs, node.rhs))
+
 class CreateControlFlowGraph(CythonTransform):
     """Create NameNode use and assignment graph."""
 
@@ -455,10 +471,12 @@ class CreateControlFlowGraph(CythonTransform):
         return node
 
     def visit_ParallelAssignmentNode(self, node):
-        for stat in node.stats:
-            self.visit(stat.rhs)
-        for stat in node.stats:
-            self.mark_assignment(stat.lhs, stat.rhs)
+        collector = AssignmentCollector()
+        collector.visitchildren(node)
+        for lhs, rhs in collector.assignments:
+            self.visit(rhs)
+        for lhs, rhs in collector.assignments:
+            self.mark_assignment(lhs, rhs)
         return node
 
     def visit_CArgDeclNode(self, node):
