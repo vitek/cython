@@ -1405,7 +1405,8 @@ class NameNode(AtomicExprNode):
             return
         entry = self.entry
         if entry:
-            entry.used = 1
+            if self.used:
+                entry.used = 1
             if entry.type.is_buffer:
                 import Buffer
                 Buffer.used_buffer_aux_vars(entry)
@@ -1419,7 +1420,8 @@ class NameNode(AtomicExprNode):
             error(self.pos, "Assignment to non-lvalue '%s'"
                 % self.name)
             self.type = PyrexTypes.error_type
-        self.entry.used = 1
+        if self.used:
+            self.entry.used = True
         if self.entry.type.is_buffer:
             import Buffer
             Buffer.used_buffer_aux_vars(self.entry)
@@ -1622,8 +1624,14 @@ class NameNode(AtomicExprNode):
                 # variables that the acquired buffer info is stored to is allocated
                 # per entry and coupled with it.
                 self.generate_acquire_buffer(rhs, code)
-
-            if self.type.is_pyobject:
+            if not self.used:
+                if self.use_managed_ref and \
+                       rhs.type.is_pyobject and rhs.result_in_temp():
+                    code.put_decref(rhs.result(), rhs.ctype())
+                rhs.generate_post_assignment_code(code)
+                rhs.free_temps(code)
+                return
+            if self.type.is_pyobject and self.used:
                 #print "NameNode.generate_assignment_code: to", self.name ###
                 #print "...from", rhs ###
                 #print "...LHS type", self.type, "ctype", self.ctype() ###
