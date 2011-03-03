@@ -312,6 +312,7 @@ def check_definitions(flow, compiler_directives):
                 state[stat.entry] = set([stat])
                 if stat.entry in tracked:
                     assignments.add(stat)
+                    stat.entry._assignments.append(stat)
             elif isinstance(stat, VariableUse):
                 if stat.entry in tracked:
                     stat.entry.references.append(stat)

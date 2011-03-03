@@ -185,6 +185,7 @@ class Entry(object):
         self.init = init
         self.overloaded_alternatives = []
         self.assignments = []
+        self._assignments = [] # XXX: FlowControl assignments list
         self.references = []
 
     def __repr__(self):
