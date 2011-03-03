@@ -5,6 +5,7 @@ cython.declare(PyrexTypes=object, Naming=object, ExprNodes=object, Nodes=object,
                TemplateTransform=object, EncodedString=object,
                error=object, warning=object, copy=object)
 
+import Builtin
 import ExprNodes
 import Nodes
 from PyrexTypes import py_object_type, unspecified_type
