@@ -334,19 +334,32 @@ def check_definitions(flow, compiler_directives):
     warn_unused_result = compiler_directives['warn.unused_result']
     warn_unused = compiler_directives['warn.unused']
     warn_unused_arg = compiler_directives['warn.unused_arg']
-    if warn_unused_result:
-        for assmt in assignments:
-            if not assmt.refs and assmt.entry.references and not assmt.entry.is_pyclass_attr:
-                warnings.append((assmt.pos, "Unused result in '%s'" % assmt.entry.name))
-    if warn_unused or warn_unused_arg:
-        for entry in tracked:
-            if not entry.references and not entry.is_pyclass_attr:
-                if entry.is_arg:
-                    if warn_unused_arg:
-                        warnings.append((entry.pos, "Unused argument '%s'" % entry.name))
+    for assmt in assignments:
+        if not assmt.refs and not assmt.entry.is_pyclass_attr \
+               and not assmt.entry.in_closure:
+            if assmt.entry.references and warn_unused_result:
+                if assmt.is_arg:
+                    warnings.append((assmt.pos, "Unused argument value '%s'" % assmt.entry.name))
                 else:
-                    if warn_unused:
-                        warnings.append((entry.pos, "Unused entry '%s'" % entry.name))
+                    warnings.append((assmt.pos, "Unused result in '%s'" % assmt.entry.name))
+            assmt.lhs.used = False
+    for entry in tracked:
+        if not entry.references and not entry.is_pyclass_attr and not entry.in_closure:
+            # XXX: dirty hack to handle *args, **kwargs remove me
+            for assmt in entry._assignments:
+                if assmt.is_arg:
+                    is_arg = True
+                    break
+            else:
+                is_arg = False
+            if is_arg:
+                if warn_unused_arg:
+                    warnings.append((entry.pos, "Unused argument '%s'" % entry.name))
+                entry.used = True # XXX
+            else:
+                if warn_unused:
+                    warnings.append((entry.pos, "Unused entry '%s'" % entry.name))
+                entry.used = False
     # Sort warnings by position
     warnings.sort(key=lambda w: w[0])
     for pos, message in warnings:
@@ -602,6 +615,9 @@ class CreateControlFlowGraph(CythonTransform):
         # Target assignment
         self.flow.nextblock()
         self.mark_assignment(node.target)
+        # XXX: force target use, it could be unused
+        # XXX: should force ForFromStatNode to use temp?
+        self.visit(node.target)
         # Body block
         self.flow.nextblock()
         self.visit(node.body)
