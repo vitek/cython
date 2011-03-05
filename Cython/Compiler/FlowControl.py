@@ -93,6 +93,12 @@ class ControlFlow(object):
         self.block = block
         return self.block
 
+    def is_tracked(self, entry):
+        """Should we track this entry?"""
+        if entry.is_anonymous:
+            return False
+        return entry.is_local or entry.is_pyclass_attr or entry.is_arg
+
     def mark_position(self, node):
         """Mark position, will be used to draw graph nodes."""
         if self.block:
@@ -102,7 +108,7 @@ class ControlFlow(object):
         if self.block:
             if entry is None:
                 entry = lhs.entry
-            if entry.is_anonymous:
+            if not self.is_tracked(entry):
                 return
             assignment = Assignment(lhs, rhs, entry)
             self.block.stats.append(assignment)
@@ -110,7 +116,7 @@ class ControlFlow(object):
             self.entries.add(entry)
 
     def mark_argument(self, lhs, rhs, entry):
-        if self.block:
+        if self.block and self.is_tracked(entry):
             assignment = Argument(lhs, rhs, entry)
             self.block.stats.append(assignment)
             self.block.gen[entry] = assignment
@@ -125,7 +131,7 @@ class ControlFlow(object):
 
     def mark_reference(self, node, entry):
         """Mark variable reference."""
-        if self.block:
+        if self.block and self.is_tracked(entry):
             self.block.stats.append(VariableUse(node, entry))
             # Local variable is definitily bound after this block
             self.block.kill[node.entry] = Uninitialized
@@ -265,7 +271,6 @@ class GV(object):
 
 def check_definitions(flow, compiler_directives):
     """Based on algo 9.11 from Dragon Book."""
-    tracked = set()
     entry_point = flow.entry_point
     for block in flow.blocks:
         block.input = {}
@@ -275,9 +280,6 @@ def check_definitions(flow, compiler_directives):
     entry_point.input = {}
     entry_point.output = {}
     for entry in flow.entries:
-        if not (entry.is_local or entry.is_pyclass_attr or entry.is_arg):
-            continue
-        tracked.add(entry)
         if not entry.is_arg:
             entry_point.gen[entry] = Uninitialized
             entry_point.output[entry] = set([Uninitialized])
@@ -317,13 +319,10 @@ def check_definitions(flow, compiler_directives):
                     state[stat.entry] = set([stat])
                 else:
                     state[stat.entry] = set([Uninitialized])
-                state[stat.entry] = set([stat])
-                if stat.entry in tracked:
-                    assignments.add(stat)
-                    stat.entry._assignments.append(stat)
+                assignments.add(stat)
+                stat.entry._assignments.append(stat)
             elif isinstance(stat, VariableUse):
-                if stat.entry in tracked:
-                    stat.entry.references.append(stat)
+                stat.entry.references.append(stat)
                 if stat.entry not in state:
                     continue
                 if Uninitialized in state[stat.entry]:
@@ -351,7 +350,7 @@ def check_definitions(flow, compiler_directives):
                 else:
                     warnings.append((assmt.pos, "Unused result in '%s'" % assmt.entry.name))
             assmt.lhs.used = False
-    for entry in tracked:
+    for entry in flow.entries:
         if not entry.references and not entry.is_pyclass_attr and not entry.in_closure:
             # XXX: dirty hack to handle *args, **kwargs remove me
             for assmt in entry._assignments:
