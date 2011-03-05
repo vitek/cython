@@ -116,6 +116,13 @@ class ControlFlow(object):
             self.block.gen[entry] = assignment
             self.entries.add(entry)
 
+    def mark_deletion(self, node, entry):
+        if self.block and self.is_tracked(entry):
+            assignment = Assignment(node, None, entry)
+            self.block.stats.append(assignment)
+            self.block.gen[entry] = Uninitialized
+            self.entries.add(entry)
+
     def mark_reference(self, node, entry):
         """Mark variable reference."""
         if self.block:
@@ -123,9 +130,6 @@ class ControlFlow(object):
             # Local variable is definitily bound after this block
             self.block.kill[node.entry] = Uninitialized
             self.entries.add(entry)
-
-    ## def add_del(self, node):
-    ##     raise NotImplementedError, "Delete is not supported yet"
 
     def normalize(self):
         """Delete unreachable and orphan blocks."""
@@ -309,6 +313,10 @@ def check_definitions(flow, compiler_directives):
             state[entry] = items.copy()
         for stat in block.stats:
             if isinstance(stat, Assignment):
+                if stat.rhs:
+                    state[stat.entry] = set([stat])
+                else:
+                    state[stat.entry] = set([Uninitialized])
                 state[stat.entry] = set([stat])
                 if stat.entry in tracked:
                     assignments.add(stat)
@@ -492,6 +500,18 @@ class CreateControlFlowGraph(CythonTransform):
             self.visit(rhs)
         for lhs, rhs in collector.assignments:
             self.mark_assignment(lhs, rhs)
+        return node
+
+    def visit_DelStatNode(self, node):
+        ## TODO: Handle del a, b, (c, d)
+        for arg in node.args:
+            if arg.is_name:
+                # Mark reference
+                self.visit(arg)
+                entry = arg.entry or self.env.lookup(arg.name)
+                self.flow.mark_deletion(arg, entry)
+            else:
+                self.visit(arg)
         return node
 
     def visit_CArgDeclNode(self, node):
