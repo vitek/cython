@@ -352,6 +352,10 @@ def check_definitions(flow, compiler_directives):
             assmt.lhs.used = False
     for entry in flow.entries:
         if not entry.references and not entry.is_pyclass_attr and not entry.in_closure:
+            # TODO: handle unused buffers
+            if entry.type.is_buffer:
+                entry.used = True
+                continue
             # XXX: dirty hack to handle *args, **kwargs remove me
             for assmt in entry._assignments:
                 if assmt.is_arg:
