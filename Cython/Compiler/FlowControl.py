@@ -356,7 +356,7 @@ def check_definitions(flow, compiler_directives):
             if entry.type.is_buffer:
                 entry.used = True
                 continue
-            # XXX: dirty hack to handle *args, **kwargs remove me
+            # TODO: starred args entries are not marked with is_arg flag
             for assmt in entry._assignments:
                 if assmt.is_arg:
                     is_arg = True
@@ -366,7 +366,8 @@ def check_definitions(flow, compiler_directives):
             if is_arg:
                 if warn_unused_arg:
                     warnings.append((entry.pos, "Unused argument '%s'" % entry.name))
-                entry.used = True # XXX
+                # TODO: handle unused arguments
+                entry.used = True
             else:
                 if warn_unused:
                     warnings.append((entry.pos, "Unused entry '%s'" % entry.name))
@@ -640,8 +641,8 @@ class CreateControlFlowGraph(CythonTransform):
         # Target assignment
         self.flow.nextblock()
         self.mark_assignment(node.target)
-        # XXX: force target use, it could be unused
-        # XXX: should force ForFromStatNode to use temp?
+
+        # TODO: force target use, should ForFromStatNode should allocate temp var instead
         self.visit(node.target)
         # Body block
         self.flow.nextblock()
