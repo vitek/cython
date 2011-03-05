@@ -176,7 +176,7 @@ class Assignment(object):
         return '%s(entry=%r)' % (self.__class__.__name__, self.entry)
 
 class Uninitialized(object):
-    is_initialized = False
+    pass
 
 class Argument(Assignment):
     is_arg = True
