@@ -110,7 +110,7 @@ class ControlFlow(object):
                 entry = lhs.entry
             if not self.is_tracked(entry):
                 return
-            assignment = Assignment(lhs, rhs, entry)
+            assignment = NameAssignment(lhs, rhs, entry)
             self.block.stats.append(assignment)
             self.block.gen[entry] = assignment
             self.entries.add(entry)
@@ -124,7 +124,7 @@ class ControlFlow(object):
 
     def mark_deletion(self, node, entry):
         if self.block and self.is_tracked(entry):
-            assignment = Assignment(node, None, entry)
+            assignment = NameAssignment(node, None, entry)
             self.block.stats.append(assignment)
             self.block.gen[entry] = Uninitialized
             self.entries.add(entry)
@@ -132,7 +132,7 @@ class ControlFlow(object):
     def mark_reference(self, node, entry):
         """Mark variable reference."""
         if self.block and self.is_tracked(entry):
-            self.block.stats.append(VariableUse(node, entry))
+            self.block.stats.append(NameReference(node, entry))
             # Local variable is definitily bound after this block
             self.block.kill[node.entry] = Uninitialized
             self.entries.add(entry)
@@ -172,7 +172,7 @@ class ExceptionDescr(object):
         self.finally_point = finally_point
         self.finally_end = finally_end
 
-class Assignment(object):
+class NameAssignment(object):
     is_arg = False
 
     def __init__(self, lhs, rhs, entry):
@@ -188,10 +188,10 @@ class Assignment(object):
 class Uninitialized(object):
     pass
 
-class Argument(Assignment):
+class Argument(NameAssignment):
     is_arg = True
 
-class VariableUse(object):
+class NameReference(object):
     def __init__(self, node, entry):
         self.node = node
         self.entry = entry
@@ -253,9 +253,9 @@ class GV(object):
             label = ctx.extract_sources(block)
             if annotate_defs:
                 for stat in block.stats:
-                    if isinstance(stat, Assignment):
+                    if isinstance(stat, NameAssignment):
                         label += '\n %s [definition]' % stat.entry.name
-                    elif isinstance(stat, VariableUse):
+                    elif isinstance(stat, NameReference):
                         if stat.entry:
                             label += '\n %s [reference]' % stat.entry.name
             if not label:
@@ -314,14 +314,14 @@ def check_definitions(flow, compiler_directives):
         for entry, items in block.input.items():
             state[entry] = items.copy()
         for stat in block.stats:
-            if isinstance(stat, Assignment):
+            if isinstance(stat, NameAssignment):
                 if stat.rhs:
                     state[stat.entry] = set([stat])
                 else:
                     state[stat.entry] = set([Uninitialized])
                 assignments.add(stat)
                 stat.entry._assignments.append(stat)
-            elif isinstance(stat, VariableUse):
+            elif isinstance(stat, NameReference):
                 stat.entry.references.append(stat)
                 if stat.entry not in state:
                     continue
