@@ -509,14 +509,19 @@ class CreateControlFlowGraph(CythonTransform):
             self.mark_assignment(lhs, rhs)
         return node
 
+    def _delete_name_node(self, node):
+        entry = node.entry or self.env.lookup(node.name)
+        if entry.in_closure or entry.from_closure:
+            error(node.pos, "can not delete variable '%s' referenced in nested scope" % entry.name)
+        # Mark reference
+        self.visit(node)
+        self.flow.mark_deletion(node, entry)
+
     def visit_DelStatNode(self, node):
         ## TODO: Handle del a, b, (c, d)
         for arg in node.args:
             if arg.is_name:
-                # Mark reference
-                self.visit(arg)
-                entry = arg.entry or self.env.lookup(arg.name)
-                self.flow.mark_deletion(arg, entry)
+                self._delete_name_node(arg)
             else:
                 self.visit(arg)
         return node
