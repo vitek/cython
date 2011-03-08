@@ -84,7 +84,6 @@ directive_defaults = {
 
     'warn': None,
     'warn.undeclared': False,
-    'warn.uninitialized': True,
     'warn.maybe_uninitialized': False,
     'warn.unreachable': True,
     'warn.unused': False,
@@ -108,7 +107,6 @@ directive_defaults = {
 
 # Extra warning directives
 extra_warnings = {
-    'warn.uninitialized': True,
     'warn.maybe_uninitialized': True,
     'warn.unreachable': True,
     'warn.unused': True,

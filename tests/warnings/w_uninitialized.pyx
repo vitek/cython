@@ -59,8 +59,8 @@ def withctx(ctx):
         print(foo)
 
 _ERRORS = """
-4:11: 'a' is used uninitialized
-10:12: 'a' might be used uninitialized
-27:12: 'a' might be used uninitialized
-33:15: 'b' might be used uninitialized
+4:11: local variable 'a' referenced before assignment
+10:12: local variable 'a' might be referenced before assignment
+27:12: local variable 'a' might be referenced before assignment
+33:15: local variable 'b' might be referenced before assignment
 """

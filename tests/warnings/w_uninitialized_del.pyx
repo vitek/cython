@@ -8,7 +8,7 @@ def foo(x):
 
 _ERRORS = """
 5:9: Deletion of non-Python, non-C++ object
-5:12: 'b' is used uninitialized
+5:12: local variable 'b' referenced before assignment
 5:12: Deletion of non-Python, non-C++ object
-7:12: 'a' is used uninitialized
+7:12: local variable 'a' referenced before assignment
 """

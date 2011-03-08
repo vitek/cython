@@ -268,6 +268,21 @@ class GV(object):
                 fp.write('  %s -> %s;\n' % (pid, ctx.nodeid(child)))
         fp.write(' }\n')
 
+class MessageCollection(list):
+    """Collect error/warnings messages first then sort"""
+
+    def error(self, pos, message):
+        self.append((pos, True, message))
+
+    def warning(self, pos, message):
+        self.append((pos, False, message))
+
+    def _key(self, item):
+        return item[0]
+
+    def sort(self):
+        list.sort(self, key=self._key)
+
 
 def check_definitions(flow, compiler_directives):
     """Based on algo 9.11 from Dragon Book."""
@@ -307,7 +322,7 @@ def check_definitions(flow, compiler_directives):
             block.input = input
             block.output = output
     # Track down state
-    warnings = []
+    messages = MessageCollection()
     assignments = set()
     for block in flow.blocks:
         state = {}
@@ -329,11 +344,10 @@ def check_definitions(flow, compiler_directives):
                     if stat.entry.from_closure:
                         pass # Can be uninitialized here
                     elif len(state[stat.entry]) == 1:
-                        if compiler_directives['warn.uninitialized']:
-                            warnings.append((stat.pos, "'%s' is used uninitialized" % stat.entry.name))
+                        messages.error(stat.pos, "local variable '%s' referenced before assignment" % stat.entry.name)
                     else:
                         if compiler_directives['warn.maybe_uninitialized']:
-                            warnings.append((stat.pos, "'%s' might be used uninitialized" % stat.entry.name))
+                            messages.warning(stat.pos, "local variable '%s' might be referenced before assignment" % stat.entry.name)
                     state[stat.entry] -= set([Uninitialized])
                 for assmt in state[stat.entry]:
                     assmt.refs.add(stat)
@@ -346,9 +360,9 @@ def check_definitions(flow, compiler_directives):
                and not assmt.entry.in_closure:
             if assmt.entry.references and warn_unused_result:
                 if assmt.is_arg:
-                    warnings.append((assmt.pos, "Unused argument value '%s'" % assmt.entry.name))
+                    messages.warning(assmt.pos, "Unused argument value '%s'" % assmt.entry.name)
                 else:
-                    warnings.append((assmt.pos, "Unused result in '%s'" % assmt.entry.name))
+                    messages.warning(assmt.pos, "Unused result in '%s'" % assmt.entry.name)
             assmt.lhs.used = False
     for entry in flow.entries:
         if not entry.references and not entry.is_pyclass_attr and not entry.in_closure:
@@ -365,17 +379,20 @@ def check_definitions(flow, compiler_directives):
                 is_arg = False
             if is_arg:
                 if warn_unused_arg:
-                    warnings.append((entry.pos, "Unused argument '%s'" % entry.name))
+                    messages.warning(entry.pos, "Unused argument '%s'" % entry.name)
                 # TODO: handle unused arguments
                 entry.used = True
             else:
                 if warn_unused:
-                    warnings.append((entry.pos, "Unused entry '%s'" % entry.name))
+                    messages.warning(entry.pos, "Unused entry '%s'" % entry.name)
                 entry.used = False
     # Sort warnings by position
-    warnings.sort(key=lambda w: w[0])
-    for pos, message in warnings:
-        warning(pos, message, 2)
+    messages.sort()
+    for pos, is_error, message in messages:
+        if is_error:
+            error(pos, message)
+        else:
+            warning(pos, message, 2)
 
 
 class AssignmentCollector(TreeVisitor):

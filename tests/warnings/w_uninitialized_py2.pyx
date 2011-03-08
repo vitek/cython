@@ -16,9 +16,9 @@ def dict_comp2(a):
 
 
 _ERRORS = """
-5:12: 'i' might be used uninitialized
+5:12: local variable 'i' might be referenced before assignment
 10:12: undeclared name not builtin: i
 10:15: undeclared name not builtin: j
-14:11: 'i' is used uninitialized
-14:14: 'j' is used uninitialized
+14:11: local variable 'i' referenced before assignment
+14:14: local variable 'j' referenced before assignment
 """

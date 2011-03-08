@@ -10,6 +10,6 @@ def foo(c):
     return Foo
 
 _ERRORS = """
-8:15: 'a' is used uninitialized
-8:18: 'b' might be used uninitialized
+8:15: local variable 'a' referenced before assignment
+8:18: local variable 'b' might be referenced before assignment
 """

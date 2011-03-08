@@ -14,6 +14,6 @@ def dict_comp(a):
 
 
 _ERRORS = """
-5:11: 'i' is used uninitialized
-11:11: 'i' is used uninitialized
+5:11: local variable 'i' referenced before assignment
+11:11: local variable 'i' referenced before assignment
 """

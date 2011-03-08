@@ -54,7 +54,7 @@ def exc_finally2():
     return a
 
 _ERRORS = """
-10:12: 'e' might be used uninitialized
-10:15: 'i' might be used uninitialized
-17:12: 'a' might be used uninitialized
+10:12: local variable 'e' might be referenced before assignment
+10:15: local variable 'i' might be referenced before assignment
+17:12: local variable 'a' might be referenced before assignment
 """

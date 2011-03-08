@@ -23,6 +23,6 @@ def simple_while_pos(n):
     return a
 
 _ERRORS = """
-7:12: 'a' might be used uninitialized
-15:12: 'a' might be used uninitialized
+7:12: local variable 'a' might be referenced before assignment
+15:12: local variable 'a' might be referenced before assignment
 """

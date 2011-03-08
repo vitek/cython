@@ -19,6 +19,6 @@ def simple_for_pos(n):
     return a
 
 _ERRORS = """
-6:12: 'a' might be used uninitialized
-12:12: 'a' might be used uninitialized
+6:12: local variable 'a' might be referenced before assignment
+12:12: local variable 'a' might be referenced before assignment
 """
