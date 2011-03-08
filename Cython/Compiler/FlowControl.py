@@ -465,7 +465,7 @@ class CreateControlFlowGraph(CythonTransform):
 
         if not rhs:
             rhs = object_expr
-        if isinstance(lhs, (ExprNodes.NameNode, Nodes.PyArgDeclNode)):
+        if lhs.is_name:
             if lhs.entry is None:
                 # TODO: This shouldn't happen...
                 return
@@ -529,12 +529,6 @@ class CreateControlFlowGraph(CythonTransform):
     def visit_CArgDeclNode(self, node):
         entry = self.env.lookup(node.name)
         self.flow.mark_argument(node, TypedExprNode(entry.type), entry)
-        return node
-
-    def visit_PyArgDeclNode(self, node):
-        # TODO: Do something with stararg types
-        entry = self.env.lookup(node.name)
-        self.flow.mark_argument(node, object_expr, entry)
         return node
 
     def visit_NameNode(self, node):
