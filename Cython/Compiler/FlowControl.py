@@ -824,6 +824,17 @@ class CreateControlFlowGraph(CythonTransform):
         self.flow.block = None
         return node
 
+    def visit_ComprehensionNode(self, node):
+        if node.expr_scope:
+            self.env_stack.append(self.env)
+            self.env = node.expr_scope
+        # Skip append node here
+        self.visit(node.target)
+        self.visit(node.loop)
+        if node.expr_scope:
+            self.env = self.env_stack.pop()
+        return node
+
     def visit_ScopedExprNode(self, node):
         if node.expr_scope:
             self.env_stack.append(self.env)
