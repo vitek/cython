@@ -310,18 +310,18 @@ class MessageCollection(list):
 def check_definitions(flow, compiler_directives):
     """Based on algo 9.11 from Dragon Book."""
     # Initialize
-    entry_point = flow.entry_point
     for block in flow.blocks:
         block.input = {}
         block.output = {}
         for entry, item in block.gen.items():
             block.output[entry] = set([item])
+
+    entry_point = flow.entry_point
     entry_point.input = {}
     entry_point.output = {}
     for entry in flow.entries:
-        if not entry.is_arg:
-            entry_point.gen[entry] = Uninitialized
-            entry_point.output[entry] = set([Uninitialized])
+        entry_point.gen[entry] = Uninitialized
+        entry_point.output[entry] = set([Uninitialized])
 
     # Per-block reaching definitons
     dirty = True
