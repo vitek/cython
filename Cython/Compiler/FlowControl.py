@@ -535,10 +535,11 @@ class CreateControlFlowGraph(CythonTransform):
         self.flow.mark_deletion(node, entry)
 
     def visit_DelStatNode(self, node):
-        ## TODO: Handle del a, b, (c, d)
         for arg in node.args:
             if arg.is_name:
                 self._delete_name_node(arg)
+            elif arg.is_sequence_constructor:
+                self.visit_DelStatNode(arg)
             else:
                 self.visit(arg)
         return node
