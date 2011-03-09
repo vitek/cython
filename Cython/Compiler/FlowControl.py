@@ -557,6 +557,11 @@ class CreateControlFlowGraph(CythonTransform):
             self.mark_assignment(lhs, rhs)
         return node
 
+    def visit_InPlaceAssignmentNode(self, node):
+        self.visitchildren(node)
+        self.mark_assignment(node.lhs, node.create_binop_node())
+        return node
+
     def _delete_name_node(self, node):
         entry = node.entry or self.env.lookup(node.name)
         if entry.in_closure or entry.from_closure:
