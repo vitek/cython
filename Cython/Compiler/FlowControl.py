@@ -13,10 +13,7 @@ from PyrexTypes import py_object_type, unspecified_type
 from Visitor import TreeVisitor, CythonTransform
 from Errors import error, warning, CompileError, InternalError
 
-try:
-    set
-except NameError:
-    from sets import Set as set
+from cython import set
 
 class TypedExprNode(ExprNodes.ExprNode):
     # Used for declaring assignments of a specified type whithout a known entry.
