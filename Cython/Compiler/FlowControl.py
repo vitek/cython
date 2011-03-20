@@ -75,6 +75,7 @@ class ControlFlow(object):
     """Control-flow graph.
 
        entry_point ControlBlock entry point for this graph
+       exit_point  ControlBlock normal exit point
        block       ControlBlock current block
        blocks      set    children nodes
        entries     set    tracked entries
@@ -90,6 +91,7 @@ class ControlFlow(object):
         self.exceptions = []
 
         self.entry_point = ControlBlock()
+        self.exit_point = ControlBlock()
         self.block = self.entry_point
 
     def newblock(self, parent=None):
@@ -488,8 +490,12 @@ class CreateControlFlowGraph(CythonTransform):
             self.flow.mark_argument(node.starstar_arg,
                                     TypedExprNode(Builtin.dict_type),
                                     node.starstar_arg.entry)
-
         self.visitchildren(node)
+
+        # Exit point
+        if self.flow.block:
+            self.flow.block.add_child(self.flow.exit_point)
+
         # Cleanup graph
         self.flow.normalize()
         check_definitions(self.flow, self.current_directives)
@@ -825,9 +831,10 @@ class CreateControlFlowGraph(CythonTransform):
         self.visitchildren(node)
 
         for exception in self.flow.exceptions[::-1]:
-                # Add exit reference
             if exception.finally_enter:
                 self.flow.block.add_child(exception.finally_enter)
+                if exception.finally_exit:
+                    exception.finally_exit.add_child(self.flow.exit_point)
                 break
         else:
             if self.flow.block:
