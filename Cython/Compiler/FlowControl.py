@@ -189,10 +189,17 @@ class LoopDescr(object):
         self.loop_block = loop_block
 
 class ExceptionDescr(object):
-    def __init__(self, entry_point, finally_point=None, finally_end=None):
+    """Exception handling helper.
+
+    entry_point   ControlBlock Exception handling entry point
+    finally_enter ControlBlock Normal finally clause entry point
+    finally_exit  ControlBlock Normal finally clause exit point
+    """
+
+    def __init__(self, entry_point, finally_enter=None, finally_exit=None):
         self.entry_point = entry_point
-        self.finally_point = finally_point
-        self.finally_end = finally_end
+        self.finally_enter = finally_enter
+        self.finally_exit = finally_exit
 
 class NameAssignment(object):
     is_arg = False
@@ -779,12 +786,12 @@ class CreateControlFlowGraph(CythonTransform):
         self.visit(node.finally_clause)
 
         # Normal execution
-        finally_point = self.flow.newblock()
-        self.flow.block = finally_point
+        finally_enter = self.flow.newblock()
+        self.flow.block = finally_enter
         self.visit(node.finally_clause)
-        finally_end = self.flow.block
+        finally_exit = self.flow.block
 
-        self.flow.exceptions.append(ExceptionDescr(entry_point, finally_point, finally_end))
+        self.flow.exceptions.append(ExceptionDescr(entry_point, finally_enter, finally_exit))
         self.flow.block = body_block
         ## XXX: Is it still required
         body_block.add_child(entry_point)
@@ -792,9 +799,9 @@ class CreateControlFlowGraph(CythonTransform):
         self.flow.exceptions.pop()
 
         if self.flow.block:
-            self.flow.block.add_child(finally_point)
-            if finally_end:
-                self.flow.block = self.flow.nextblock(parent=finally_end)
+            self.flow.block.add_child(finally_enter)
+            if finally_exit:
+                self.flow.block = self.flow.nextblock(parent=finally_exit)
             else:
                 self.flow.block = None
         return node
@@ -818,12 +825,13 @@ class CreateControlFlowGraph(CythonTransform):
         self.visitchildren(node)
 
         for exception in self.flow.exceptions[::-1]:
-            if exception.finally_point:
-                self.flow.block.add_child(exception.finally_point)
                 # Add exit reference
+            if exception.finally_enter:
+                self.flow.block.add_child(exception.finally_enter)
                 break
         else:
-            pass # Exit ref
+            if self.flow.block:
+                self.flow.block.add_child(self.flow.exit_point)
         self.flow.block = None
         return node
 
@@ -834,10 +842,10 @@ class CreateControlFlowGraph(CythonTransform):
         loop = self.flow.loops[-1]
         self.mark_position(node)
         for exception in self.flow.exceptions[::-1]:
-            if exception.finally_point:
-                self.flow.block.add_child(exception.finally_point)
-                if exception.finally_end:
-                    exception.finally_end.add_child(loop.next_block)
+            if exception.finally_enter:
+                self.flow.block.add_child(exception.finally_enter)
+                if exception.finally_exit:
+                    exception.finally_exit.add_child(loop.next_block)
                 break
         else:
             self.flow.block.add_child(loop.next_block)
@@ -851,10 +859,10 @@ class CreateControlFlowGraph(CythonTransform):
         loop = self.flow.loops[-1]
         self.mark_position(node)
         for exception in self.flow.exceptions[::-1]:
-            if exception.finally_point:
-                self.flow.block.add_child(exception.finally_point)
-                if exception.finally_end:
-                    exception.finally_end.add_child(loop.loop_block)
+            if exception.finally_enter:
+                self.flow.block.add_child(exception.finally_enter)
+                if exception.finally_exit:
+                    exception.finally_exit.add_child(loop.loop_block)
                 break
         else:
             self.flow.block.add_child(loop.loop_block)
