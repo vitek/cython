@@ -373,8 +373,6 @@ def check_definitions(flow, compiler_directives):
                 stat.entry._assignments.append(stat)
             elif isinstance(stat, NameReference):
                 stat.entry.references.append(stat)
-                if stat.entry not in state:
-                    continue
                 if Uninitialized in state[stat.entry]:
                     if stat.entry.from_closure:
                         pass # Can be uninitialized here
