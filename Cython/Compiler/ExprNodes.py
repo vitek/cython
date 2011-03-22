@@ -1631,7 +1631,7 @@ class NameNode(AtomicExprNode):
                 rhs.generate_post_assignment_code(code)
                 rhs.free_temps(code)
                 return
-            if self.type.is_pyobject and self.used:
+            if self.type.is_pyobject:
                 #print "NameNode.generate_assignment_code: to", self.name ###
                 #print "...from", rhs ###
                 #print "...LHS type", self.type, "ctype", self.ctype() ###
