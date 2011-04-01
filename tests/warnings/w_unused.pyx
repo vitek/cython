@@ -18,6 +18,10 @@ def unused_nested():
     def unused_one():
         pass
 
+def unused_class():
+    class Unused:
+        pass
+
 # this should not generate warning
 def used(x, y):
     x.y = 1
@@ -30,4 +34,5 @@ _ERRORS = """
 9:15: Unused argument 'arg'
 13:6: Unused result in 'r'
 18:4: Unused entry 'unused_one'
+22:4: Unused entry 'Unused'
 """
