@@ -895,9 +895,10 @@ class CreateControlFlowGraph(CythonTransform):
         return node
 
     def visit_PyClassDefNode(self, node):
-        self.flow.mark_assignment(node, object_expr, self.env.lookup(node.name))
+        self.flow.mark_assignment(node.target,
+                                  object_expr, self.env.lookup(node.name))
         # TODO: add negative attribute list to "visitchildren"?
-        self.visitchildren(node, attrs=['dict', 'metaclass', 'mkw', 'bases', 'classobj', 'target'])
+        self.visitchildren(node, attrs=['dict', 'metaclass', 'mkw', 'bases', 'classobj'])
         self.env_stack.append(self.env)
         self.env = node.scope
         self.flow.nextblock()
