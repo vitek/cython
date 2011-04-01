@@ -506,6 +506,8 @@ class CreateControlFlowGraph(CythonTransform):
         return node
 
     def visit_DefNode(self, node):
+        ## XXX: no target name node here
+        node.used = True
         self.flow.mark_assignment(node, object_expr, self.env.lookup(node.name))
         return self.visit_FuncDefNode(node)
 
