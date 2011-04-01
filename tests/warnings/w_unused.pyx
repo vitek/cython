@@ -14,6 +14,10 @@ def unused_result():
     r = 2
     return r
 
+def unused_nested():
+    def unused_one():
+        pass
+
 # this should not generate warning
 def used(x, y):
     x.y = 1
@@ -25,4 +29,5 @@ _ERRORS = """
 6:9: Unused entry 'b'
 9:15: Unused argument 'arg'
 13:6: Unused result in 'r'
+18:4: Unused entry 'unused_one'
 """
