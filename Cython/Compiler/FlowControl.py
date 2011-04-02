@@ -71,6 +71,13 @@ class ControlBlock(object):
         block.parents.add(self)
 
 
+class ExitBlock(ControlBlock):
+    """Non-empty exit point block."""
+
+    def empty(self):
+        return False
+
+
 class ControlFlow(object):
     """Control-flow graph.
 
@@ -91,7 +98,8 @@ class ControlFlow(object):
         self.exceptions = []
 
         self.entry_point = ControlBlock()
-        self.exit_point = ControlBlock()
+        self.exit_point = ExitBlock()
+        self.blocks.add(self.exit_point)
         self.block = self.entry_point
 
     def newblock(self, parent=None):
