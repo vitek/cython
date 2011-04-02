@@ -53,8 +53,23 @@ def exc_finally2():
         a = 1
     return a
 
+
+def exc_assmt_except(a):
+    try:
+        x = a
+    except:
+        return x
+
+def exc_assmt_finaly(a):
+    try:
+        x = a
+    except:
+        return x
+
 _ERRORS = """
 10:12: local variable 'e' might be referenced before assignment
 10:15: local variable 'i' might be referenced before assignment
 17:12: local variable 'a' might be referenced before assignment
+61:16: local variable 'x' might be referenced before assignment
+67:16: local variable 'x' might be referenced before assignment
 """

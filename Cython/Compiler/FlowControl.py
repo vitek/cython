@@ -518,6 +518,8 @@ class CreateControlFlowGraph(CythonTransform):
         if not self.flow.block:
             return
         if self.flow.exceptions:
+            exc_descr = self.flow.exceptions[-1]
+            self.flow.block.add_child(exc_descr.entry_point)
             self.flow.nextblock()
 
         if isinstance(lhs, (ExprNodes.AttributeNode, ExprNodes.IndexNode)):
@@ -537,6 +539,11 @@ class CreateControlFlowGraph(CythonTransform):
         else:
             # Could use this info to infer cdef class attributes...
             pass
+
+        if self.flow.exceptions:
+            exc_descr = self.flow.exceptions[-1]
+            self.flow.block.add_child(exc_descr.entry_point)
+            self.flow.nextblock()
 
     def mark_position(self, node):
         """Mark position if DOT output is enabled."""
