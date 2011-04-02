@@ -1269,6 +1269,9 @@ class NameNode(AtomicExprNode):
     #  name            string    Python name of the variable
     #  entry           Entry     Symbol table entry
     #  type_entry      Entry     For extension type names, the original type entry
+    #  cf_is_null      boolean   Is uninitialized before this node
+    #  cf_maybe_null   boolean   Maybe uninitialized before this node
+    #  allow_null      boolean   Do not raise UnboundLocalError, if it NULL
 
     is_name = True
     is_cython_module = False
@@ -1278,6 +1281,9 @@ class NameNode(AtomicExprNode):
     used = True
     entry = None
     type_entry = None
+    cf_is_null = False
+    cf_maybe_null = True
+    allow_null = False
 
     def create_analysed_rvalue(pos, env, entry):
         node = NameNode(pos)
@@ -1555,15 +1561,10 @@ class NameNode(AtomicExprNode):
                 code.error_goto_if_null(self.result(), self.pos)))
             code.put_gotref(self.py_result())
 
-        elif entry.is_local and False:
-            # control flow not good enough yet
-            assigned = entry.scope.control_flow.get_state((entry.name, 'initialized'), self.pos)
-            if assigned is False:
-                error(self.pos, "local variable '%s' referenced before assignment" % entry.name)
-            elif not Options.init_local_none and assigned is None:
+        elif entry.is_local:
+            if entry.type.is_pyobject and self.cf_maybe_null and not self.allow_null:
                 code.putln('if (%s == 0) { PyErr_SetString(PyExc_UnboundLocalError, "%s"); %s }' %
                            (entry.cname, entry.name, code.error_goto(self.pos)))
-                entry.scope.control_flow.set_state(self.pos, (entry.name, 'initialized'), True)
 
     def generate_assignment_code(self, rhs, code):
         #print "NameNode.generate_assignment_code:", self.name ###
@@ -1629,6 +1630,15 @@ class NameNode(AtomicExprNode):
                     code.put_decref(rhs.result(), rhs.ctype())
                 rhs.generate_post_assignment_code(code)
                 rhs.free_temps(code)
+
+                # Free previous result
+                if self.type.is_pyobject and entry.used:
+                    if not self.cf_is_null:
+                        if self.cf_maybe_null:
+                            code.put_xdecref(self.result(), self.ctype())
+                        else:
+                            code.put_decref(self.result(), self.ctype())
+                        code.putln('%s = NULL;' % self.result())
                 return
             if self.type.is_pyobject:
                 #print "NameNode.generate_assignment_code: to", self.name ###
@@ -1639,15 +1649,12 @@ class NameNode(AtomicExprNode):
                     rhs.make_owned_reference(code)
                     if entry.is_cglobal:
                         code.put_gotref(self.py_result())
-                    if not self.lhs_of_first_assignment:
-                        if entry.is_local and not Options.init_local_none:
-                            initialized = entry.scope.control_flow.get_state((entry.name, 'initialized'), self.pos)
-                            if initialized is True:
-                                code.put_decref(self.result(), self.ctype())
-                            elif initialized is None:
+                    if not self.lhs_of_first_assignment: # TODO: is this still required
+                        if not self.cf_is_null:
+                            if self.cf_maybe_null:
                                 code.put_xdecref(self.result(), self.ctype())
-                        else:
-                            code.put_decref(self.result(), self.ctype())
+                            else:
+                                code.put_decref(self.result(), self.ctype())
                     if entry.is_cglobal:
                         code.put_giveref(rhs.py_result())
 
