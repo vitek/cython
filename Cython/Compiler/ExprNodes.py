@@ -4583,12 +4583,14 @@ class SetNode(ExprNode):
 class DictNode(ExprNode):
     #  Dictionary constructor.
     #
-    #  key_value_pairs  [DictItemNode]
+    #  key_value_pairs     [DictItemNode]
+    #  exclude_null_values [boolean]          Do not add NULL values to dict
     #
     # obj_conversion_errors    [PyrexError]   used internally
 
     subexprs = ['key_value_pairs']
     is_temp = 1
+    exclude_null_values = False
     type = dict_type
 
     obj_conversion_errors = []
@@ -4676,11 +4678,15 @@ class DictNode(ExprNode):
         for item in self.key_value_pairs:
             item.generate_evaluation_code(code)
             if self.type.is_pyobject:
+                if self.exclude_null_values:
+                    code.putln('if (%s) {' % item.value.py_result())
                 code.put_error_if_neg(self.pos,
                     "PyDict_SetItem(%s, %s, %s)" % (
                         self.result(),
                         item.key.py_result(),
                         item.value.py_result()))
+                if self.exclude_null_values:
+                    code.putln('}')
             else:
                 code.putln("%s.%s = %s;" % (
                         self.result(),

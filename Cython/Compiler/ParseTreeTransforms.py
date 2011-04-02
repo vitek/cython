@@ -1662,9 +1662,9 @@ class TransformBuiltinMethods(EnvTransform):
                 pos = node.pos
                 items = [ ExprNodes.DictItemNode(pos,
                                                  key=ExprNodes.StringNode(pos, value=var),
-                                                 value=ExprNodes.NameNode(pos, name=var))
+                                                 value=ExprNodes.NameNode(pos, name=var, allow_null=True))
                           for var in lenv.entries ]
-                return ExprNodes.DictNode(pos, key_value_pairs=items)
+                return ExprNodes.DictNode(pos, key_value_pairs=items, exclude_null_values=True)
 
         # cython.foo
         function = node.function.as_cython_attribute()
