@@ -347,20 +347,23 @@ def check_definitions(flow, compiler_directives):
         for block in flow.blocks:
             input = {}
             for parent in block.parents:
-                for entry, items in parent.output.items():
+                for entry, items in parent.output.iteritems():
                     if entry in input:
                         input[entry].update(items)
                     else:
-                        input[entry] = items.copy()
+                        input[entry] = set(items)
             output = {}
-            for entry, items in input.items():
-                output[entry] = items.copy()
+            for entry, items in input.iteritems():
+                if entry in block.gen:
+                    continue
+                output[entry] = set(items)
                 if entry in block.bounded:
-                    output[entry] -= set([Uninitialized])
-            for entry, item in block.gen.items():
+                    output[entry].discard(Uninitialized)
+            for entry, item in block.gen.iteritems():
                 output[entry] = set([item])
-            if output != block.output:
-                dirty = True
+            if not dirty:
+                if output != block.output:
+                    dirty = True
             block.input = input
             block.output = output
 
@@ -369,7 +372,7 @@ def check_definitions(flow, compiler_directives):
     assignments = set()
     for block in flow.blocks:
         state = {}
-        for entry, items in block.input.items():
+        for entry, items in block.input.iteritems():
             state[entry] = items.copy()
         for stat in block.stats:
             if isinstance(stat, NameAssignment):
