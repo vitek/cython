@@ -1219,7 +1219,8 @@ class FuncDefNode(StatNode, BlockNode):
             genv = genv.outer_scope
         if self.needs_closure:
             lenv = ClosureScope(name=self.entry.name,
-                                outer_scope = genv,
+                                outer_scope=genv,
+                                parent_scope=env,
                                 scope_name=self.entry.cname)
         else:
             lenv = LocalScope(name=self.entry.name,

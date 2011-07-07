@@ -1481,8 +1481,8 @@ class ClosureScope(LocalScope):
 
     is_closure_scope = True
 
-    def __init__(self, name, scope_name, outer_scope):
-        LocalScope.__init__(self, name, outer_scope)
+    def __init__(self, name, scope_name, outer_scope, parent_scope):
+        LocalScope.__init__(self, name, outer_scope, parent_scope)
         self.closure_cname = "%s%s" % (Naming.closure_scope_prefix, scope_name)
 
 #    def mangle_closure_cnames(self, scope_var):
