@@ -109,6 +109,7 @@ class Context(object):
         from ParseTreeTransforms import AnalyseExpressionsTransform
         from ParseTreeTransforms import CreateClosureClasses, MarkClosureVisitor, DecoratorTransform
         from ParseTreeTransforms import InterpretCompilerDirectives, TransformBuiltinMethods
+        from ParseTreeTransforms import TransformSuper
         from ParseTreeTransforms import ExpandInplaceOperators, ParallelRangeTransform
         from TypeInference import MarkAssignments, MarkOverflowingArithmetic
         from ParseTreeTransforms import AdjustDefByDirectives, AlignFunctionDefinitions
@@ -155,6 +156,7 @@ class Context(object):
             EmbedSignature(self),
             EarlyReplaceBuiltinCalls(self),  ## Necessary?
             TransformBuiltinMethods(self),  ## Necessary?
+            TransformSuper(self),
             CreateControlFlowGraph(self),
             RemoveUnreachableCode(self),
             MarkAssignments(self),

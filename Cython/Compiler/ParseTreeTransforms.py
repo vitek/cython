@@ -2309,6 +2309,62 @@ class TransformBuiltinMethods(EnvTransform):
         return node
 
 
+class ClassEnvTracker(object):
+    def __init__(self):
+        self.class_node = None
+
+    def visit_ClassDefNode(self, node):
+        saved = self.class_node
+        self.class_node = node
+        self.visitchildren(node)
+        self.class_node = saved
+        return node
+
+
+class TransformSuper(EnvTransform, ClassEnvTracker):
+    def _transform_super(self, node, func_name):
+        env, func_node = self.env_stack[-1]
+        entry = env.lookup_here(func_name)
+
+        if entry or node.args: # not builtin or with args
+            return node
+
+        if (not self.class_node or
+            self.class_node.scope != env.parent_scope):
+            error(node.pos,
+                  "super() with no arguments is not allowed here")
+            return node
+
+        if not func_node.args:
+            error(node.pos,
+                  "Method calling super() with no arguments must have self argument")
+            return node
+
+        self_arg = func_node.args[0]
+
+        if self.class_node.scope.is_c_class_scope:
+            node.args = [
+                ExprNodes.NameNode(node.pos,
+                                   name=self.class_node.scope.name,
+                                   entry=self.class_node.entry),
+                ExprNodes.NameNode(node.pos,
+                                   name=self_arg.name,
+                                   entry=self_arg.entry)]
+        else:
+            error(node.pos,
+                  "super() with no arguments is not yet supported here")
+        return node
+
+    def visit_SimpleCallNode(self, node):
+        self.visitchildren(node)
+
+        if isinstance(node.function, ExprNodes.NameNode):
+            func_name = node.function.name
+            if func_name == 'super':
+                return self._transform_super(node, func_name)
+        return node
+
+
 class FindUninitializedParallelVars(CythonTransform, SkipDeclarations):
     """
     This transform isn't part of the pipeline, it simply finds all references
