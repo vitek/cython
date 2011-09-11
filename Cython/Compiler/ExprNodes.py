@@ -5352,23 +5352,33 @@ class GeneratorExpressionNode(LambdaNode):
     #
     # loop      ForStatNode   the for-loop, containing a YieldExprNode
     # def_node  DefNode       the underlying generator 'def' node
+    # sequence  ExprNode      Generator expression sequence
+
+    subexprs = ['sequence']
 
     name = StringEncoding.EncodedString('genexpr')
     binding = False
+    sequence = None
 
     def analyse_declarations(self, env):
+        old = env.directives.pop('always_allow_keywords')
+        env.directives['always_allow_keywords'] = False
         super(GeneratorExpressionNode, self).analyse_declarations(env)
         # No pymethdef required
         self.def_node.pymethdef_required = False
-        # Force genexpr signature
-        self.def_node.entry.signature = TypeSlots.pyfunction_noargs
+        env.directives['always_allow_keywords'] = old
+
+    def analyse_types(self, env):
+        self.sequence.analyse_types(env)
+        super(GeneratorExpressionNode, self).analyse_types(env)
 
     def generate_result_code(self, code):
         code.putln(
-            '%s = %s(%s, NULL); %s' % (
+            '%s = %s(%s, %s); %s' % (
                 self.result(),
                 self.def_node.entry.func_cname,
                 self.self_result_code(),
+                self.sequence.result(),
                 code.error_goto_if_null(self.result(), self.pos)))
         code.put_gotref(self.py_result())
 

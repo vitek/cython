@@ -212,9 +212,24 @@ class PostParse(ScopeTrackingTransform):
         self.genexpr_counter += 1
         node.genexpr_name = EncodedString(u'genexpr%d' % genexpr_id)
 
+        node.sequence = node.loop.iterator.sequence
+        node.loop.iterator.sequence = ExprNodes.NameNode(node.pos, name="__iterator")
+
+        iter_arg = Nodes.CArgDeclNode(
+            node.loop.pos,
+            base_type=Nodes.CAnalysedBaseTypeNode(
+                node.loop.pos, type=PyrexTypes.py_object_type),
+            declarator=Nodes.CNameDeclaratorNode(
+                node.loop.pos,
+                name=EncodedString("__iterator"),
+                default=None,
+                cname=None),
+            default=None,
+            annotation=None)
+
         node.def_node = Nodes.DefNode(node.pos, name=node.name,
                                       doc=None,
-                                      args=[], star_arg=None,
+                                      args=[iter_arg], star_arg=None,
                                       starstar_arg=None,
                                       body=node.loop)
         self.visitchildren(node)
