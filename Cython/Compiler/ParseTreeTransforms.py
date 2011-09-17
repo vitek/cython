@@ -2251,7 +2251,6 @@ class TransformBuiltinMethods(EnvTransform):
         return node
 
     def _inject_locals(self, node, func_name):
-        self.visitchildren(node)
         # locals()/dir()/vars() builtins
         lenv = self.current_env()
         entry = lenv.lookup_here(func_name)
@@ -2284,7 +2283,6 @@ class TransformBuiltinMethods(EnvTransform):
             return ExprNodes.ListNode(pos, args=items)
 
     def _inject_eval(self, node, func_name):
-        self.visitchildren(node)
         lenv = self.current_env()
         entry = lenv.lookup_here(func_name)
         if entry or len(node.args) != 1:
@@ -2296,13 +2294,6 @@ class TransformBuiltinMethods(EnvTransform):
         return node
 
     def visit_SimpleCallNode(self, node):
-        if isinstance(node.function, ExprNodes.NameNode):
-            func_name = node.function.name
-            if func_name in ('dir', 'locals', 'vars'):
-                return self._inject_locals(node, func_name)
-            if func_name == 'eval':
-                return self._inject_eval(node, func_name)
-
         # cython.foo
         function = node.function.as_cython_attribute()
         if function:
@@ -2355,6 +2346,13 @@ class TransformBuiltinMethods(EnvTransform):
                       u"'%s' not a valid cython language construct" % function)
 
         self.visitchildren(node)
+
+        if isinstance(node, ExprNodes.SimpleCallNode) and node.function.is_name:
+            func_name = node.function.name
+            if func_name in ('dir', 'locals', 'vars'):
+                return self._inject_locals(node, func_name)
+            if func_name == 'eval':
+                return self._inject_eval(node, func_name)
         return node
 
 
