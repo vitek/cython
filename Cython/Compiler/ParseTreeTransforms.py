@@ -212,6 +212,9 @@ class PostParse(ScopeTrackingTransform):
         self.genexpr_counter += 1
         node.genexpr_name = EncodedString(u'genexpr%d' % genexpr_id)
 
+        node.sequence = node.loop.iterator.sequence
+        node.loop.iterator.sequence = ExprNodes.GenexprIteratorNode(
+            node.pos, node.sequence)
         node.def_node = Nodes.DefNode(node.pos, name=node.name,
                                       doc=None,
                                       args=[], star_arg=None,
@@ -2064,6 +2067,12 @@ class CreateClosureClasses(CythonTransform):
                                     is_cdef=True)
             if entry.is_declared_generic:
                 closure_entry.is_declared_generic = 1
+        # Add genexpr iterator
+        if inner_node and isinstance(inner_node,
+                                     ExprNodes.GeneratorExpressionNode):
+            class_scope.declare_var(
+                pos=entry.pos, name=None, cname=Naming.genexpr_iter_cname,
+                type=PyrexTypes.py_object_type, is_cdef=True)
         node.needs_closure = True
         # Do it here because other classes are already checked
         target_module_scope.check_c_class(func_scope.scope_class)

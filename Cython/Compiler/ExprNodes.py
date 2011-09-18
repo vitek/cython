@@ -5345,6 +5345,25 @@ class LambdaNode(InnerFunctionNode):
         super(LambdaNode, self).generate_result_code(code)
 
 
+class GenexprIteratorNode(AtomicExprNode):
+    def __init__(self, pos, sequence):
+        AtomicExprNode.__init__(self, pos)
+        self.sequence = sequence
+
+    def analyse_types(self, env):
+        self.type = self.sequence.type
+        self.is_temp = 0
+
+    def infer_type(self, env):
+        return self.sequence.type
+
+    def result(self):
+        return '%s->%s' % (Naming.cur_scope_cname, Naming.genexpr_iter_cname)
+
+    def generate_result_code(self, code):
+        pass
+
+
 class GeneratorExpressionNode(LambdaNode):
     # A generator expression, e.g.  (i for i in range(10))
     #
@@ -5352,9 +5371,13 @@ class GeneratorExpressionNode(LambdaNode):
     #
     # loop      ForStatNode   the for-loop, containing a YieldExprNode
     # def_node  DefNode       the underlying generator 'def' node
+    # sequence  ExprNode      Generator expression sequence
+
+    subexprs = ['sequence']
 
     name = StringEncoding.EncodedString('genexpr')
     binding = False
+    sequence = None
 
     def analyse_declarations(self, env):
         super(GeneratorExpressionNode, self).analyse_declarations(env)
@@ -5362,6 +5385,10 @@ class GeneratorExpressionNode(LambdaNode):
         self.def_node.pymethdef_required = False
         # Force genexpr signature
         self.def_node.entry.signature = TypeSlots.pyfunction_noargs
+
+    def analyse_types(self, env):
+        self.sequence.analyse_types(env)
+        super(GeneratorExpressionNode, self).analyse_types(env)
 
     def generate_result_code(self, code):
         code.putln(
@@ -5371,6 +5398,12 @@ class GeneratorExpressionNode(LambdaNode):
                 self.self_result_code(),
                 code.error_goto_if_null(self.result(), self.pos)))
         code.put_gotref(self.py_result())
+        code.putln('%s->%s = %s;' % (
+            self.def_node.local_scope.scope_class.type.cast_code(self.result()),
+            Naming.genexpr_iter_cname,
+            self.sequence.result()))
+        code.put_incref(self.sequence.result(), self.sequence.type)
+        code.put_giveref(self.sequence.result())
 
 
 class YieldExprNode(ExprNode):
