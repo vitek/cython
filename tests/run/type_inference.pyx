@@ -392,7 +392,7 @@ cdef object some_float_value():
 @cython.test_assert_path_exists('//NameNode[@type.is_pyobject]',
                                 '//NameNode[@type.is_pyobject = False]')
 @infer_types(None)
-def double_loop():
+cpdef double_loop():
     """
     >>> double_loop() == 1.0 * 10
     True
