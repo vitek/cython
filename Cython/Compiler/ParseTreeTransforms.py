@@ -1845,6 +1845,65 @@ class RemoveUnreachableCode(CythonTransform):
         return node
 
 
+class DefNodeAssignmentSynthesis(CythonTransform):
+    def __call__(self, root):
+        self.env_stack = [root.scope]
+        return super(DefNodeAssignmentSynthesis, self).__call__(root)
+
+    def visit_ClassDefNode(self, node):
+        self.env_stack.append(node.scope)
+        self.visitchildren(node)
+        self.env_stack.pop()
+        return node
+
+    def visit_LambdaNode(self, node):
+        return node
+
+    def visit_DefNode(self, node):
+        self.env_stack.append(node.local_scope)
+        self.visitchildren(node)
+        self.env_stack.pop()
+
+        env = self.env_stack[-1]
+        if (node.entry.is_anonymous or
+            (env.is_module_scope and env.directives.get('binding')) or
+            (env.is_py_class_scope or env.is_closure_scope)):
+            return self.synthesize_defnode_assignment(node, env)
+        return node
+
+    def synthesize_defnode_assignment(self, node, env):
+        rhs = ExprNodes.PyCFunctionNode(
+            node.pos, def_node=node,
+            code_object=ExprNodes.CodeObjectNode(node))
+        node.synthesized_node = rhs
+        node.is_synthesized = True
+
+        rhs.analyse_declarations(env)
+
+        if node.decorators:
+            for decorator in node.decorators[::-1]:
+                rhs = ExprNodes.SimpleCallNode(
+                    decorator.pos,
+                    function=decorator.decorator,
+                    args=[rhs])
+        assmt = Nodes.SingleAssignmentNode(
+            node.pos,
+            lhs=ExprNodes.NameNode(node.pos, name=node.name),
+            rhs=rhs)
+        assmt.analyse_declarations(env)
+        # Now it's better than making PyCFunctionNode parent of DefNode
+        return [node, assmt]
+
+    def visit_CnameDecoratorNode(self, node):
+        # XXX: Don't know how to handle CnameDecoratorNode now
+        self.visitchildren(node.node)
+        return node
+
+    def visit_GeneratorBodyDefNode(self, node):
+        self.visitchildren(node)
+        return node
+
+
 class YieldNodeCollector(TreeVisitor):
 
     def __init__(self):
@@ -2008,9 +2067,6 @@ class CreateClosureClasses(CythonTransform):
         return from_closure, in_closure
 
     def create_class_from_scope(self, node, target_module_scope, inner_node=None):
-        # skip generator body
-        if node.is_generator_body:
-            return
         # move local variables into closure
         if node.is_generator:
             for entry in node.local_scope.entries.values():
@@ -2029,12 +2085,9 @@ class CreateClosureClasses(CythonTransform):
         while cscope.is_py_class_scope or cscope.is_c_class_scope:
             cscope = cscope.outer_scope
 
-        if not from_closure and (self.path or inner_node):
-            if not inner_node:
-                if not node.py_cfunc_node:
-                    raise InternalError, "DefNode does not have assignment node"
-                inner_node = node.py_cfunc_node
-            inner_node.needs_self_code = False
+        if not from_closure:
+            if inner_node:
+                inner_node.needs_self_code = False
             node.needs_outer_scope = False
 
         base_type = None
@@ -2087,18 +2140,18 @@ class CreateClosureClasses(CythonTransform):
         self.in_lambda = was_in_lambda
         return node
 
-    def visit_FuncDefNode(self, node):
-        if self.in_lambda:
-            self.visitchildren(node)
-            return node
-        if node.needs_closure or self.path:
-            self.create_class_from_scope(node, self.module_scope)
-            self.path.append(node)
-            self.visitchildren(node)
-            self.path.pop()
+    def visit_DefNode(self, node):
+        if not self.in_lambda:
+            self.create_class_from_scope(
+                node, self.module_scope, node.synthesized_node)
+        self.visitchildren(node)
         return node
 
     def visit_CFuncDefNode(self, node):
+        self.visitchildren(node)
+        return node
+
+    def visit_GeneratorBodyDefNode(self, node):
         self.visitchildren(node)
         return node
 

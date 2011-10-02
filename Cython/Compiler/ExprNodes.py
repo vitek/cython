@@ -5546,38 +5546,55 @@ class PyCFunctionNode(ExprNode, ModuleNameMixin):
     #  from a PyMethodDef struct.
     #
     #  pymethdef_cname   string             PyMethodDef structure
-    #  self_object       ExprNode or None
-    #  binding           bool
+    #  binding           bool               Use CyFunction or PyCFunction
     #  module_name       EncodedString      Name of defining module
     #  code_object       CodeObjectNode     the PyCodeObject creator node
+    #  def_node          DefNode            the underlying 'def' node
 
     subexprs = ['code_object']
 
-    self_object = None
+    def_node = None
     code_object = None
     binding = False
+    needs_self_code = True
 
     type = py_object_type
     is_temp = 1
 
+    def is_binding_required(self, env):
+        if env.is_py_class_scope:
+            if (self.def_node.is_staticmethod or self.def_node.is_classmethod):
+                return False
+            else:
+                return True
+        genv = env
+        while genv.is_py_class_scope or genv.is_c_class_scope:
+            genv = genv.outer_scope
+        if genv.is_closure_scope:
+            return True
+        else:
+            return env.directives['binding']
+
     def analyse_types(self, env):
+        if not self.def_node.is_synthesized:
+            self.def_node.analyse_expressions(env)
+        self.def_node.pymethdef_required = True
+        self.pymethdef_cname = self.def_node.entry.pymethdef_cname
+        self.binding = self.is_binding_required(env)
         if self.binding:
             env.use_utility_code(binding_cfunc_utility_code)
-
         #TODO(craig,haoyu) This should be moved to a better place
         self.set_mod_name(env)
 
     def may_be_none(self):
         return False
 
-    gil_message = "Constructing Python function"
-
     def self_result_code(self):
-        if self.self_object is None:
-            self_result = "NULL"
-        else:
-            self_result = self.self_object.py_result()
-        return self_result
+        if self.needs_self_code:
+            return "((PyObject*) %s)" % (Naming.cur_scope_cname)
+        return "NULL"
+
+    gil_message = "Constructing Python function"
 
     def generate_result_code(self, code):
         if self.binding:
@@ -5601,17 +5618,6 @@ class PyCFunctionNode(ExprNode, ModuleNameMixin):
                 code.error_goto_if_null(self.result(), self.pos)))
         code.put_gotref(self.py_result())
 
-class InnerFunctionNode(PyCFunctionNode):
-    # Special PyCFunctionNode that depends on a closure class
-    #
-
-    binding = True
-    needs_self_code = True
-
-    def self_result_code(self):
-        if self.needs_self_code:
-            return "((PyObject*)%s)" % (Naming.cur_scope_cname)
-        return "NULL"
 
 class CodeObjectNode(ExprNode):
     # Create a PyCodeObject for a CyFunction instance.
@@ -5672,7 +5678,7 @@ class CodeObjectNode(ExprNode):
             ))
 
 
-class LambdaNode(InnerFunctionNode):
+class LambdaNode(PyCFunctionNode):
     # Lambda expression node (only used as a function reference)
     #
     # args          [CArgDeclNode]         formal arguments
@@ -5680,23 +5686,15 @@ class LambdaNode(InnerFunctionNode):
     # starstar_arg  PyArgDeclNode or None  ** argument
     # lambda_name   string                 a module-globally unique lambda name
     # result_expr   ExprNode
-    # def_node      DefNode                the underlying function 'def' node
-
     child_attrs = ['def_node']
-
-    def_node = None
     name = StringEncoding.EncodedString('<lambda>')
 
-    def analyse_declarations(self, env):
-        self.def_node.no_assignment_synthesis = True
-        self.def_node.pymethdef_required = True
-        self.def_node.analyse_declarations(env)
-        self.pymethdef_cname = self.def_node.entry.pymethdef_cname
-        env.add_lambda_def(self.def_node)
+    def is_binding_required(self, env):
+        return True
 
-    def analyse_types(self, env):
-        self.def_node.analyse_expressions(env)
-        super(LambdaNode, self).analyse_types(env)
+    def analyse_declarations(self, env):
+        self.def_node.analyse_declarations(env)
+        env.add_lambda_def(self.def_node)
 
     def generate_result_code(self, code):
         self.def_node.generate_execution_code(code)
@@ -5709,17 +5707,20 @@ class GeneratorExpressionNode(LambdaNode):
     # Result is a generator.
     #
     # loop      ForStatNode   the for-loop, containing a YieldExprNode
-    # def_node  DefNode       the underlying generator 'def' node
 
     name = StringEncoding.EncodedString('genexpr')
-    binding = False
+
+    def is_binding_required(self, env):
+        return False
 
     def analyse_declarations(self, env):
         super(GeneratorExpressionNode, self).analyse_declarations(env)
-        # No pymethdef required
-        self.def_node.pymethdef_required = False
-        # Force genexpr signature
+        # Force signature
         self.def_node.entry.signature = TypeSlots.pyfunction_noargs
+
+    def analyse_types(self, env):
+        super(GeneratorExpressionNode, self).analyse_types(env)
+        self.def_node.pymethdef_required = False
 
     def generate_result_code(self, code):
         code.putln(

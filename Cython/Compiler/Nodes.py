@@ -1202,7 +1202,6 @@ class FuncDefNode(StatNode, BlockNode):
     # starstar_arg  PyArgDeclNode or None  ** argument
 
     py_func = None
-    assmt = None
     needs_closure = False
     needs_outer_scope = False
     pymethdef_required = False
@@ -1326,14 +1325,11 @@ class FuncDefNode(StatNode, BlockNode):
         if preprocessor_guard:
             code.putln(preprocessor_guard)
 
-        with_pymethdef = (self.needs_assignment_synthesis(env, code) or
-                          self.pymethdef_required)
         if self.py_func:
-            self.py_func.generate_function_header(code,
-                with_pymethdef = with_pymethdef,
-                proto_only=True)
+            self.py_func.generate_function_header(
+                code, with_pymethdef=self.pymethdef_required, proto_only=True)
         self.generate_function_header(code,
-            with_pymethdef = with_pymethdef)
+                                      with_pymethdef=self.pymethdef_required)
         # ----- Local variable declarations
         # Find function scope
         cenv = env
@@ -1717,10 +1713,6 @@ class FuncDefNode(StatNode, BlockNode):
                         code.put_giveref(default.result())
                     default.generate_post_assignment_code(code)
                     default.free_temps(code)
-        # For Python class methods, create and store function object
-        if self.assmt:
-            self.assmt.generate_execution_code(code)
-
     #
     # Special code for the __getbuffer__ function
     #
@@ -1892,9 +1884,6 @@ class CFuncDefNode(FuncDefNode):
             self.analyse_default_values(env)
         self.acquire_gil = self.need_gil_acquisition(self.local_scope)
 
-    def needs_assignment_synthesis(self, env, code=None):
-        return False
-
     def generate_function_header(self, code, with_pymethdef, with_opt_args = 1, with_dispatch = 1, cname = None):
         scope = self.local_scope
         arg_decls = []
@@ -2062,8 +2051,6 @@ class DefNode(FuncDefNode):
     #  The following subnode is constructed internally
     #  when the def statement is inside a Python class definition.
     #
-    #  assmt   AssignmentNode   Function construction/assignment
-    #  py_cfunc_node  PyCFunctionNode/InnerFunctionNode   The PyCFunction to create and assign
 
     child_attrs = ["args", "star_arg", "starstar_arg", "body", "decorators"]
 
@@ -2073,13 +2060,13 @@ class DefNode(FuncDefNode):
     num_required_kw_args = 0
     reqd_kw_flags_cname = "0"
     is_wrapper = 0
-    no_assignment_synthesis = 0
+    is_synthesized = 0
+    synthesized_node = None
     decorators = None
     return_type_annotation = None
     entry = None
     acquire_gil = 0
     self_in_stararg = 0
-    py_cfunc_node = None
     doc = None
 
     def __init__(self, pos, **kwds):
@@ -2398,60 +2385,9 @@ class DefNode(FuncDefNode):
     def analyse_expressions(self, env):
         self.local_scope.directives = env.directives
         self.analyse_default_values(env)
-        if self.needs_assignment_synthesis(env):
-            # Shouldn't we be doing this at the module level too?
-            self.synthesize_assignment_node(env)
-        elif self.decorators:
+        if not self.is_synthesized and self.decorators:
             for decorator in self.decorators[::-1]:
                 decorator.decorator.analyse_expressions(env)
-
-    def needs_assignment_synthesis(self, env, code=None):
-        if self.no_assignment_synthesis:
-            return False
-        # Should enable for module level as well, that will require more testing...
-        if self.entry.is_anonymous:
-            return True
-        if env.is_module_scope:
-            if code is None:
-                return env.directives['binding']
-            else:
-                return code.globalstate.directives['binding']
-        return env.is_py_class_scope or env.is_closure_scope
-
-    def synthesize_assignment_node(self, env):
-        import ExprNodes
-        genv = env
-        while genv.is_py_class_scope or genv.is_c_class_scope:
-            genv = genv.outer_scope
-
-        if genv.is_closure_scope:
-            rhs = self.py_cfunc_node = ExprNodes.InnerFunctionNode(
-                self.pos, pymethdef_cname = self.entry.pymethdef_cname,
-                code_object = ExprNodes.CodeObjectNode(self))
-        else:
-            rhs = self.py_cfunc_node = ExprNodes.PyCFunctionNode(
-                self.pos, pymethdef_cname = self.entry.pymethdef_cname,
-                binding = env.directives['binding'],
-                code_object = ExprNodes.CodeObjectNode(self))
-
-        if env.is_py_class_scope:
-            if not self.is_staticmethod and not self.is_classmethod:
-                rhs.binding = True
-            else:
-                rhs.binding = False
-
-        if self.decorators:
-            for decorator in self.decorators[::-1]:
-                rhs = ExprNodes.SimpleCallNode(
-                    decorator.pos,
-                    function = decorator.decorator,
-                    args = [rhs])
-
-        self.assmt = SingleAssignmentNode(self.pos,
-            lhs = ExprNodes.NameNode(self.pos, name = self.name),
-            rhs = rhs)
-        self.assmt.analyse_declarations(env)
-        self.assmt.analyse_expressions(env)
 
     def generate_function_header(self, code, with_pymethdef, proto_only=0):
         arg_code_list = []

@@ -117,6 +117,7 @@ def create_pipeline(context, mode, exclude_classes=()):
     from Visitor import PrintTree
     from ParseTreeTransforms import WithTransform, NormalizeTree, PostParse, PxdPostParse
     from ParseTreeTransforms import ForwardDeclareTypes, AnalyseDeclarationsTransform
+    from ParseTreeTransforms import DefNodeAssignmentSynthesis
     from ParseTreeTransforms import AnalyseExpressionsTransform
     from ParseTreeTransforms import CreateClosureClasses, MarkClosureVisitor, DecoratorTransform
     from ParseTreeTransforms import InterpretCompilerDirectives, TransformBuiltinMethods
@@ -134,6 +135,7 @@ def create_pipeline(context, mode, exclude_classes=()):
     from Buffer import IntroduceBufferAuxiliaryVars
     from ModuleNode import check_c_declarations, check_c_declarations_pxd
     from ModuleNode import check_c_declarations
+
 
 
     if mode == 'pxd':
@@ -167,6 +169,7 @@ def create_pipeline(context, mode, exclude_classes=()):
         DecoratorTransform(context),
         ForwardDeclareTypes(context),
         AnalyseDeclarationsTransform(context),
+        DefNodeAssignmentSynthesis(context),
         AutoTestDictTransform(context),
         EmbedSignature(context),
         EarlyReplaceBuiltinCalls(context),  ## Necessary?
