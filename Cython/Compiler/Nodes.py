@@ -1211,6 +1211,7 @@ class FuncDefNode(StatNode, BlockNode):
     modifiers = []
     star_arg = None
     starstar_arg = None
+    is_cyfunction = False
 
     def analyse_default_values(self, env):
         genv = env.global_scope()
@@ -1419,10 +1420,16 @@ class FuncDefNode(StatNode, BlockNode):
             code.put_gotref(Naming.cur_scope_cname)
             # Note that it is unsafe to decref the scope at this point.
         if self.needs_outer_scope:
-            code.putln("%s = (%s)%s;" % (
-                            outer_scope_cname,
-                            cenv.scope_class.type.declaration_code(''),
-                            Naming.self_cname))
+            if self.is_cyfunction:
+                code.putln("%s = (%s) __Pyx_CyFunction_GetClosure(%s);" % (
+                    outer_scope_cname,
+                    cenv.scope_class.type.declaration_code(''),
+                    Naming.self_cname))
+            else:
+                code.putln("%s = (%s) %s;" % (
+                    outer_scope_cname,
+                    cenv.scope_class.type.declaration_code(''),
+                    Naming.self_cname))
             if lenv.is_passthrough:
                 code.putln("%s = %s;" % (Naming.cur_scope_cname, outer_scope_cname));
             elif self.needs_closure:
@@ -2087,6 +2094,7 @@ class DefNode(FuncDefNode):
     self_in_stararg = 0
     py_cfunc_node = None
     doc = None
+    uses_super = False
 
     def __init__(self, pos, **kwds):
         FuncDefNode.__init__(self, pos, **kwds)
@@ -2437,14 +2445,14 @@ class DefNode(FuncDefNode):
         else:
             rhs = self.py_cfunc_node = ExprNodes.PyCFunctionNode(
                 self.pos, pymethdef_cname = self.entry.pymethdef_cname,
-                binding = env.directives['binding'],
+                is_cyfunction = env.directives['binding'],
                 code_object = ExprNodes.CodeObjectNode(self))
 
+        # XXX: see vitek/_defnode_assignment
         if env.is_py_class_scope:
-            if not self.is_staticmethod and not self.is_classmethod:
-                rhs.binding = True
-            else:
-                rhs.binding = False
+            rhs.is_cyfunction = True
+        self.is_cyfunction = rhs.is_cyfunction
+        rhs.def_node = self
 
         if self.decorators:
             for decorator in self.decorators[::-1]:
@@ -3360,10 +3368,12 @@ class PyClassDefNode(ClassDefNode):
     #  classobj ClassNode  Class object
     #  target   NameNode   Variable to assign class object to
 
-    child_attrs = ["body", "dict", "metaclass", "mkw", "bases", "class_result", "target"]
+    child_attrs = ["body", "dict", "metaclass", "mkw", "bases", "class_result",
+                   "target", "class_cell"]
     decorators = None
     class_result = None
     py3_style_class = False # Python3 style class (bases+kwargs)
+    class_cell = None
 
     def __init__(self, pos, name, bases, doc, body, decorators = None,
                  keyword_args = None, starstar_arg = None):
@@ -3417,6 +3427,7 @@ class PyClassDefNode(ClassDefNode):
             self.classobj = ExprNodes.ClassNode(pos, name = name,
                     bases = bases, dict = self.dict, doc = doc_node)
         self.target = ExprNodes.NameNode(pos, name = name)
+        self.class_cell = ExprNodes.ClassCellInjectorNode(self.pos)
 
     def as_cclass(self):
         """
@@ -3495,6 +3506,7 @@ class PyClassDefNode(ClassDefNode):
         cenv = self.scope
         self.body.analyse_expressions(cenv)
         self.target.analyse_target_expression(env, self.classobj)
+        self.class_cell.analyse_expressions(cenv)
 
     def generate_function_definitions(self, env, code):
         self.generate_lambda_definitions(self.scope, code)
@@ -3509,8 +3521,12 @@ class PyClassDefNode(ClassDefNode):
             self.metaclass.generate_evaluation_code(code)
         self.dict.generate_evaluation_code(code)
         cenv.namespace_cname = cenv.class_obj_cname = self.dict.result()
+        self.class_cell.generate_evaluation_code(code)
         self.body.generate_execution_code(code)
         self.class_result.generate_evaluation_code(code)
+        self.class_cell.generate_injection_code(
+            code, self.class_result.result())
+        self.class_cell.generate_disposal_code(code)
         cenv.namespace_cname = cenv.class_obj_cname = self.classobj.result()
         self.target.generate_assignment_code(self.class_result, code)
         self.dict.generate_disposal_code(code)

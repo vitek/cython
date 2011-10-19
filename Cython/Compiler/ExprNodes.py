@@ -5599,6 +5599,52 @@ class PyClassNamespaceNode(ExprNode, ModuleNameMixin):
                 code.error_goto_if_null(self.result(), self.pos)))
         code.put_gotref(self.py_result())
 
+class ClassCellInjectorNode(ExprNode):
+    is_temp = True
+    type = py_object_type
+
+    uses_super = 0
+    subexprs = []
+
+    def analyse_expressions(self, env):
+        if env.uses_super:
+            self.uses_super = True
+            env.use_utility_code(cyfunction_set_classobj_utility_code)
+
+    def generate_evaluation_code(self, code):
+        if self.uses_super:
+            self.allocate_temp_result(code)
+            code.putln(
+                '%s = PyList_New(0); %s' % (
+                    self.result(),
+                    code.error_goto_if_null(self.result(), self.pos)))
+            code.put_gotref(self.result())
+
+    def generate_injection_code(self, code, classobj_cname):
+        if self.uses_super:
+            code.putln('__Pyx_CyFunction_InitClassCell(%s, %s);' % (
+                self.result(), classobj_cname))
+
+class ClassCellNode(ExprNode):
+    # Class cell handler for noargs super()
+    subexprs = []
+    is_temp = True
+    type = py_object_type
+
+    def analyse_types(self, env):
+        pass
+
+    def generate_result_code(self, code):
+        code.putln('%s = __Pyx_CyFunction_GetClassObj(%s);' % (
+            self.result(),
+            Naming.self_cname))
+        code.putln(
+            'if (!%s) { PyErr_SetString(PyExc_SystemError, '
+            '"super(): __class__ cell not found"); %s }' % (
+                self.result(),
+                code.error_goto(self.pos)));
+        code.put_incref(self.result(), py_object_type)
+
 class BoundMethodNode(ExprNode):
     #  Helper class used in the implementation of Python
     #  class definitions. Constructs an bound method
@@ -5672,15 +5718,15 @@ class PyCFunctionNode(ExprNode, ModuleNameMixin):
 
     self_object = None
     code_object = None
-    binding = False
+    is_cyfunction = True
+    def_node = None
 
     type = py_object_type
     is_temp = 1
 
     def analyse_types(self, env):
-        if self.binding:
+        if self.is_cyfunction:
             env.use_utility_code(binding_cfunc_utility_code)
-
         #TODO(craig,haoyu) This should be moved to a better place
         self.set_mod_name(env)
 
@@ -5696,33 +5742,62 @@ class PyCFunctionNode(ExprNode, ModuleNameMixin):
             self_result = self.self_object.py_result()
         return self_result
 
-    def generate_result_code(self, code):
-        if self.binding:
-            constructor = "__Pyx_CyFunction_NewEx"
-            if self.code_object:
-                code_object_result = ', ' + self.code_object.py_result()
-            else:
-                code_object_result = ', NULL'
-        else:
-            constructor = "PyCFunction_NewEx"
-            code_object_result = ''
+    def create_cyfunction(self, code):
         py_mod_name = self.get_py_mod_name(code)
+        if self.code_object:
+            code_object_result = self.code_object.py_result()
+        else:
+            code_object_result = 'NULL'
+        flags = []
+        if self.def_node.is_staticmethod:
+            flags.append('__PYX_CYFUNCTION_FLAG_STATICMETHOD')
+        elif self.def_node.is_classmethod:
+            flags.append('__PYX_CYFUNCTION_FLAG_CLASSMETHOD')
+        if flags:
+            flags = ' | '.join(flags)
+        else:
+            flags = '0'
         code.putln(
-            '%s = %s(&%s, %s, %s%s); %s' % (
+            '%s = __Pyx_CyFunction_NewEx(&%s, %s, %s, %s, %s); %s' % (
                 self.result(),
-                constructor,
                 self.pymethdef_cname,
                 self.self_result_code(),
                 py_mod_name,
+                flags,
                 code_object_result,
                 code.error_goto_if_null(self.result(), self.pos)))
         code.put_gotref(self.py_result())
+        if self.def_node.uses_super:
+            class_node = code.pyclass_stack[-1]
+            code.put_incref(self.py_result(), py_object_type)
+            code.putln(
+                'PyList_Append(%s, %s);' % (
+                    class_node.class_cell.result(),
+                    self.result()))
+            code.put_giveref(self.py_result())
+
+    def create_pycfunction(self, code):
+        py_mod_name = self.get_py_mod_name(code)
+        code.putln(
+            '%s = PyCFunction_NewEx(&%s, %s, %s); %s' % (
+                self.result(),
+                self.pymethdef_cname,
+                self.self_result_code(),
+                py_mod_name,
+                code.error_goto_if_null(self.result(), self.pos)))
+        code.put_gotref(self.py_result())
+
+    def generate_result_code(self, code):
+        if self.is_cyfunction:
+            self.create_cyfunction(code)
+        else:
+            self.create_pycfunction(code)
 
 class InnerFunctionNode(PyCFunctionNode):
     # Special PyCFunctionNode that depends on a closure class
     #
 
-    binding = True
+    is_cyfunction = True
     needs_self_code = True
 
     def self_result_code(self):
@@ -5808,6 +5883,7 @@ class LambdaNode(InnerFunctionNode):
         self.def_node.no_assignment_synthesis = True
         self.def_node.pymethdef_required = True
         self.def_node.analyse_declarations(env)
+        self.def_node.is_cyfunction = True
         self.pymethdef_cname = self.def_node.entry.pymethdef_cname
         env.add_lambda_def(self.def_node)
 
@@ -5829,7 +5905,7 @@ class GeneratorExpressionNode(LambdaNode):
     # def_node  DefNode       the underlying generator 'def' node
 
     name = StringEncoding.EncodedString('genexpr')
-    binding = False
+    is_cyfunction = False
 
     def analyse_declarations(self, env):
         super(GeneratorExpressionNode, self).analyse_declarations(env)
@@ -5837,6 +5913,7 @@ class GeneratorExpressionNode(LambdaNode):
         self.def_node.pymethdef_required = False
         # Force genexpr signature
         self.def_node.entry.signature = TypeSlots.pyfunction_noargs
+        self.def_node.is_cyfunction = False
 
     def generate_result_code(self, code):
         code.putln(
@@ -9615,6 +9692,14 @@ proto="""
 #define __Pyx_CyFunction_USED 1
 #include <structmember.h>
 
+
+#define __PYX_CYFUNCTION_FLAG_STATICMETHOD  0x01
+#define __PYX_CYFUNCTION_FLAG_CLASSMETHOD   0x02
+
+#define __Pyx_CyFunction_GetClosure(f) (((__pyx_CyFunctionObject *) (f))->func_closure)
+#define __Pyx_CyFunction_GetClassObj(f) (((__pyx_CyFunctionObject *) (f))->classobj)
+
+
 typedef struct {
     PyCFunctionObject func;
     PyObject *func_dict;
@@ -9622,11 +9707,17 @@ typedef struct {
     PyObject *func_name;
     PyObject *func_doc;
     PyObject *func_code;
+
+    PyObject *func_closure;
+    PyObject *classobj; /* Used by super() */
+    int flags;
 } __pyx_CyFunctionObject;
 
 static PyTypeObject *__pyx_CyFunctionType = 0;
 
-static PyObject *__Pyx_CyFunction_NewEx(PyMethodDef *ml, PyObject *self, PyObject *module, PyObject* code);
+static PyObject *__Pyx_CyFunction_NewEx(PyMethodDef *ml, PyObject *closure,
+                                        PyObject *module, int flags,
+                                        PyObject* code);
 
 static int __Pyx_CyFunction_init(void);
 """ % Naming.__dict__,
@@ -9815,19 +9906,25 @@ static PyMethodDef __pyx_CyFunction_methods[] = {
 };
 
 
-static PyObject *__Pyx_CyFunction_NewEx(PyMethodDef *ml, PyObject *self, PyObject *module, PyObject* code) {
-    __pyx_CyFunctionObject *op = PyObject_GC_New(__pyx_CyFunctionObject, __pyx_CyFunctionType);
+static PyObject *__Pyx_CyFunction_NewEx(PyMethodDef *ml, PyObject *closure,
+                                        PyObject *module, int flags,
+                                        PyObject* code) {
+    __pyx_CyFunctionObject *op = PyObject_GC_New(__pyx_CyFunctionObject,
+                                                 __pyx_CyFunctionType);
     if (op == NULL)
         return NULL;
+    op->flags = flags;
     op->func_weakreflist = NULL;
     op->func.m_ml = ml;
-    Py_XINCREF(self);
-    op->func.m_self = self;
+    op->func.m_self = (PyObject *) op;
     Py_XINCREF(module);
     op->func.m_module = module;
     op->func_dict = NULL;
     op->func_name = NULL;
     op->func_doc = NULL;
+    Py_XINCREF(closure);
+    op->func_closure = closure;
+    op->classobj = NULL;
     Py_XINCREF(code);
     op->func_code = code;
     PyObject_GC_Track(op);
@@ -9839,28 +9936,43 @@ static void __Pyx_CyFunction_dealloc(__pyx_CyFunctionObject *m)
     PyObject_GC_UnTrack(m);
     if (m->func_weakreflist != NULL)
         PyObject_ClearWeakRefs((PyObject *) m);
-    Py_XDECREF(m->func.m_self);
+    //Py_XDECREF(m->func.m_self);
+    Py_XDECREF(m->func_closure);
     Py_XDECREF(m->func.m_module);
     Py_XDECREF(m->func_dict);
     Py_XDECREF(m->func_name);
     Py_XDECREF(m->func_doc);
     Py_XDECREF(m->func_code);
+    Py_XDECREF(m->classobj);
     PyObject_GC_Del(m);
 }
 
 static int __Pyx_CyFunction_traverse(__pyx_CyFunctionObject *m, visitproc visit, void *arg)
 {
-    Py_VISIT(m->func.m_self);
+    Py_VISIT(m->func_closure);
     Py_VISIT(m->func.m_module);
     Py_VISIT(m->func_dict);
     Py_VISIT(m->func_name);
     Py_VISIT(m->func_doc);
     Py_VISIT(m->func_code);
+    Py_VISIT(m->classobj);
     return 0;
 }
 
 static PyObject *__Pyx_CyFunction_descr_get(PyObject *func, PyObject *obj, PyObject *type)
 {
+    __pyx_CyFunctionObject *m = (__pyx_CyFunctionObject *) func;
+
+    if (m->flags & __PYX_CYFUNCTION_FLAG_STATICMETHOD) {
+        Py_INCREF(func);
+        return func;
+    }
+    if (m->flags & __PYX_CYFUNCTION_FLAG_CLASSMETHOD) {
+        if (type == NULL)
+            type = (PyObject *)(Py_TYPE(obj));
+        return PyMethod_New(func,
+                            type, (PyObject *)(Py_TYPE(type)));
+    }
     if (obj == Py_None)
         obj = NULL;
     return PyMethod_New(func, obj, type);
@@ -9945,6 +10057,27 @@ static int __Pyx_CyFunction_init(void)
     return 0;
 }
 """)
+
+cyfunction_set_classobj_utility_code = UtilityCode(
+proto='''
+static inline void __Pyx_CyFunction_InitClassCell(PyObject *cyfunctions,
+                                                      PyObject *classobj);
+''',
+impl='''
+void __Pyx_CyFunction_InitClassCell(PyObject *cyfunctions,
+                                    PyObject *classobj)
+{
+    int i;
+
+    for (i = 0; i < PyList_GET_SIZE(cyfunctions); i++) {
+        __pyx_CyFunctionObject *m =
+                    (__pyx_CyFunctionObject *) PyList_GET_ITEM(cyfunctions, i);
+        m->classobj = classobj;
+        Py_INCREF(classobj);
+    }
+}
+''',
+requires=[binding_cfunc_utility_code])
 
 generator_utility_code = UtilityCode(
 proto="""

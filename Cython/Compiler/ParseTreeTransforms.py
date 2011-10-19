@@ -2333,6 +2333,28 @@ class TransformBuiltinMethods(EnvTransform):
                     node.pos, self.current_scope_node(), lenv))
         return node
 
+    def _inject_super(self, node, func_name):
+        lenv = self.current_env()
+        entry = lenv.lookup_here(func_name)
+        if entry or node.args:
+            return node
+        # Inject no-args super
+        scope_node = self.current_scope_node()
+        if not isinstance(scope_node, Nodes.DefNode):
+            return node
+        parent_scope = scope_node.local_scope.parent_scope
+        if parent_scope.is_py_class_scope:
+            if scope_node.args:
+                scope_node.uses_super = True
+                parent_scope.uses_super = True
+                node.args = [
+                    ExprNodes.ClassCellNode(node.pos),
+                    ExprNodes.NameNode(node.pos, name=scope_node.args[0].name)
+                    ]
+                return node
+        warning(node.pos, "No-args super() isn't supported here", 2)
+        return node
+
     def visit_SimpleCallNode(self, node):
         # cython.foo
         function = node.function.as_cython_attribute()
@@ -2393,6 +2415,8 @@ class TransformBuiltinMethods(EnvTransform):
                 return self._inject_locals(node, func_name)
             if func_name == 'eval':
                 return self._inject_eval(node, func_name)
+            if func_name == 'super':
+                return self._inject_super(node, func_name)
         return node
 
 
