@@ -3173,6 +3173,9 @@ class GeneratorDefNode(DefNode):
         code.putln('%s.resume_label = 0;' % generator_cname)
         code.putln('%s.body = (__pyx_generator_body_t) %s;' % (generator_cname, body_cname))
         code.put_giveref(Naming.cur_scope_cname)
+        if self.uses_super:
+            code.putln('%s->classobj = __Pyx_CyFunction_GetClassObj(%s);' % (
+                Naming.cur_scope_cname, Naming.self_cname))
         code.put_finish_refcount_context()
         code.putln("return (PyObject *) %s;" % Naming.cur_scope_cname);
 

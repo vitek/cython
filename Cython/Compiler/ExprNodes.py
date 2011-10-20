@@ -5629,15 +5629,20 @@ class ClassCellNode(ExprNode):
     # Class cell handler for noargs super()
     subexprs = []
     is_temp = True
+    is_generator = False
     type = py_object_type
 
     def analyse_types(self, env):
         pass
 
     def generate_result_code(self, code):
-        code.putln('%s = __Pyx_CyFunction_GetClassObj(%s);' % (
-            self.result(),
-            Naming.self_cname))
+        if not self.is_generator:
+            code.putln('%s = __Pyx_CyFunction_GetClassObj(%s);' % (
+                self.result(),
+                Naming.self_cname))
+        else:
+            code.putln('%s =  %s->classobj;' % (
+                self.result(), Naming.cur_scope_cname))
         code.putln(
             'if (!%s) { PyErr_SetString(PyExc_SystemError, '
             '"super(): __class__ cell not found"); %s }' % (

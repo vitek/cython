@@ -2063,6 +2063,11 @@ class CreateClosureClasses(CythonTransform):
         class_scope = entry.type.scope
         class_scope.is_internal = True
 
+        if node.is_generator and node.uses_super:
+            class_scope.declare_var(pos=node.pos, name='classobj',
+                                    cname='classobj',
+                                    type=PyrexTypes.py_object_type,
+                                    is_cdef=True)
         if from_closure:
             assert cscope.is_closure_scope
             class_scope.declare_var(pos=node.pos,
@@ -2348,7 +2353,8 @@ class TransformBuiltinMethods(EnvTransform):
                 scope_node.uses_super = True
                 parent_scope.uses_super = True
                 node.args = [
-                    ExprNodes.ClassCellNode(node.pos),
+                    ExprNodes.ClassCellNode(
+                        node.pos, is_generator=scope_node.is_generator),
                     ExprNodes.NameNode(node.pos, name=scope_node.args[0].name)
                     ]
                 return node
