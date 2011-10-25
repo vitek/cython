@@ -49,6 +49,8 @@ closure_scope_prefix = pyrex_prefix + "scope_"
 closure_class_prefix = pyrex_prefix + "scope_struct_"
 lambda_func_prefix = pyrex_prefix + "lambda_"
 module_is_main   = pyrex_prefix + "module_is_main_"
+defaults_struct_prefix = pyrex_prefix + 'defaults'
+
 
 args_cname       = pyrex_prefix + "args"
 sent_value_cname = pyrex_prefix + "sent_value"

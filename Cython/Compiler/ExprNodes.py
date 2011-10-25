@@ -5729,11 +5729,52 @@ class PyCFunctionNode(ExprNode, ModuleNameMixin):
     type = py_object_type
     is_temp = 1
 
+    defaults = None
+    defaults_struct = None
+    defaults_pyobjects = 0
+
     def analyse_types(self, env):
         if self.is_cyfunction:
             env.use_utility_code(binding_cfunc_utility_code)
+            self.analyse_default_args(env)
         #TODO(craig,haoyu) This should be moved to a better place
         self.set_mod_name(env)
+
+    def analyse_default_args(self, env):
+        """
+        Handle non-literal function's default arguments.
+        """
+        nonliteral_objects = []
+        nonliteral_other = []
+        for arg in self.def_node.args:
+            if arg.default and not arg.default.is_literal:
+                arg.is_dynamic = True
+                if arg.type.is_pyobject:
+                    nonliteral_objects.append(arg)
+                else:
+                    nonliteral_other.append(arg)
+        if nonliteral_objects or nonliteral_objects:
+            module_scope = env.global_scope()
+            cname = module_scope.next_id(Naming.defaults_struct_prefix)
+            scope = Symtab.StructOrUnionScope(cname)
+            self.defaults = []
+            for arg in nonliteral_objects:
+                entry = scope.declare_var(arg.name, py_object_type, None,
+                                          Naming.arg_prefix + arg.name,
+                                          allow_pyobject=True)
+                self.defaults.append((arg, entry))
+            for arg in nonliteral_other:
+                entry = scope.declare_var(arg.name, arg.type, None,
+                                          Naming.arg_prefix + arg.name,
+                                          allow_pyobject=True)
+                self.defaults.append((arg, entry))
+            entry = module_scope.declare_struct_or_union(None, 'struct', scope, 1,
+                                                 None, cname=cname)
+            self.defaults_struct = scope
+            self.defaults_pyobjects = len(nonliteral_objects)
+            for arg, entry in self.defaults:
+                arg.default_value = '__defaults->%s' % entry.cname
+            self.def_node.defaults_struct = self.defaults_struct.name
 
     def may_be_none(self):
         return False
@@ -5780,6 +5821,17 @@ class PyCFunctionNode(ExprNode, ModuleNameMixin):
                     class_node.class_cell.result(),
                     self.result()))
             code.put_giveref(self.py_result())
+
+        if self.defaults:
+            code.putln(
+                'if (!__PyxCyFunction_InitDefaults(%s, sizeof(%s), %d)) %s' % (
+                    self.result(), self.defaults_struct.name,
+                    self.defaults_pyobjects, code.error_goto(self.pos)))
+            defaults = '__Pyx_CyFunction_Defaults(%s, %s)' % (
+                self.defaults_struct.name, self.result())
+            for arg, entry in self.defaults:
+                arg.generate_assignment_code(code, target='%s->%s' % (
+                    defaults, entry.cname))
 
     def create_pycfunction(self, code):
         py_mod_name = self.get_py_mod_name(code)
@@ -9704,6 +9756,8 @@ proto="""
 #define __Pyx_CyFunction_GetClosure(f) (((__pyx_CyFunctionObject *) (f))->func_closure)
 #define __Pyx_CyFunction_GetClassObj(f) (((__pyx_CyFunctionObject *) (f))->classobj)
 
+#define __Pyx_CyFunction_Defaults(type, f) ((type *)(((__pyx_CyFunctionObject *) (f))->defaults))
+
 
 typedef struct {
     PyCFunctionObject func;
@@ -9715,6 +9769,11 @@ typedef struct {
 
     PyObject *func_closure;
     PyObject *classobj; /* Used by super() */
+
+    /* Dynamic default args*/
+    void *defaults;
+    int defaults_pyobjects; /* Number of python objects inside defaults */
+
     int flags;
 } __pyx_CyFunctionObject;
 
@@ -9723,6 +9782,8 @@ static PyTypeObject *__pyx_CyFunctionType = 0;
 static PyObject *__Pyx_CyFunction_NewEx(PyMethodDef *ml, PyObject *closure,
                                         PyObject *module, int flags,
                                         PyObject* code);
+static inline void *__PyxCyFunction_InitDefaults(PyObject *m, size_t size,
+                                                 int pyobjects);
 
 static int __Pyx_CyFunction_init(void);
 """ % Naming.__dict__,
@@ -9932,13 +9993,25 @@ static PyObject *__Pyx_CyFunction_NewEx(PyMethodDef *ml, PyObject *closure,
     op->classobj = NULL;
     Py_XINCREF(code);
     op->func_code = code;
+
+    op->defaults_pyobjects = 0;
+    op->defaults = NULL;
+
     PyObject_GC_Track(op);
     return (PyObject *)op;
 }
 
 static void __Pyx_CyFunction_dealloc(__pyx_CyFunctionObject *m)
 {
+    int i;
+
     PyObject_GC_UnTrack(m);
+
+    if (m->defaults) {
+        for (i = 0; i < m->defaults_pyobjects; i++)
+            Py_XDECREF(__Pyx_CyFunction_Defaults(PyObject *, m)[i]);
+        PyMem_Free(m->defaults);
+    }
     if (m->func_weakreflist != NULL)
         PyObject_ClearWeakRefs((PyObject *) m);
     //Py_XDECREF(m->func.m_self);
@@ -9954,6 +10027,11 @@ static void __Pyx_CyFunction_dealloc(__pyx_CyFunctionObject *m)
 
 static int __Pyx_CyFunction_traverse(__pyx_CyFunctionObject *m, visitproc visit, void *arg)
 {
+    int i;
+
+    for (i = 0; i < m->defaults_pyobjects; i++)
+        Py_VISIT(__Pyx_CyFunction_Defaults(PyObject *, m)[i]);
+
     Py_VISIT(m->func_closure);
     Py_VISIT(m->func.m_module);
     Py_VISIT(m->func_dict);
@@ -10060,6 +10138,18 @@ static int __Pyx_CyFunction_init(void)
         return -1;
     __pyx_CyFunctionType = &__pyx_CyFunctionType_type;
     return 0;
+}
+
+void *__PyxCyFunction_InitDefaults(PyObject *func, size_t size, int pyobjects)
+{
+    __pyx_CyFunctionObject *m = (__pyx_CyFunctionObject *) func;
+
+    m->defaults = PyMem_Malloc(size);
+    if (!m->defaults)
+        return PyErr_NoMemory();
+    memset(m->defaults, 0, sizeof(size));
+    m->defaults_pyobjects = pyobjects;
+    return m->defaults;
 }
 """)
 
