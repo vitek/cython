@@ -5111,17 +5111,14 @@ class ScopedExprNode(ExprNode):
             generate_inner_evaluation_code(code)
             return
 
-        code.putln('{ /* enter inner scope */')
         py_entries = []
         for entry in self.expr_scope.var_entries:
             if not entry.in_closure:
-                code.put_var_declaration(entry)
                 if entry.type.is_pyobject and entry.used:
                     py_entries.append(entry)
         if not py_entries:
             # no local Python references => no cleanup required
             generate_inner_evaluation_code(code)
-            code.putln('} /* exit inner scope */')
             return
 
         # must free all local Python references at each exit point
@@ -5132,7 +5129,13 @@ class ScopedExprNode(ExprNode):
 
         # normal (non-error) exit
         for entry in py_entries:
-            code.put_var_decref(entry)
+            if entry.is_cglobal:
+                code.put_var_xgotref(entry)
+                code.put_var_xdecref(entry)
+                code.put_init_var_to_py_none(entry)
+                code.put_var_giveref(entry)
+            else:
+                code.put_var_xdecref_clear(entry)
 
         # error/loop body exit points
         exit_scope = code.new_label('exit_scope')
@@ -5142,10 +5145,15 @@ class ScopedExprNode(ExprNode):
             if code.label_used(label):
                 code.put_label(label)
                 for entry in py_entries:
-                    code.put_var_decref(entry)
+                    if entry.is_cglobal:
+                        code.put_var_xgotref(entry)
+                        code.put_var_xdecref(entry)
+                        code.put_init_var_to_py_none(entry)
+                        code.put_var_giveref(entry)
+                    else:
+                        code.put_var_xdecref_clear(entry)
                 code.put_goto(old_label)
         code.put_label(exit_scope)
-        code.putln('} /* exit inner scope */')
 
         code.set_loop_labels(old_loop_labels)
         code.error_label = old_error_label
@@ -5163,6 +5171,8 @@ class ComprehensionNode(ScopedExprNode):
         self.init_scope(env)
 
     def analyse_scoped_declarations(self, env):
+        if self.has_local_scope:
+            self.loop.parent_scope_iterator = True
         self.loop.analyse_declarations(env)
 
     def analyse_types(self, env):
@@ -5276,6 +5286,7 @@ class InlinedGeneratorExpressionNode(ScopedExprNode):
     type = py_object_type
 
     def analyse_scoped_declarations(self, env):
+        self.loop.parent_scope_iterator = True
         self.loop.analyse_declarations(env)
 
     def may_be_none(self):
@@ -6293,10 +6304,11 @@ class GlobalsExprNode(AtomicExprNode):
 
 class FuncLocalsExprNode(DictNode):
     def __init__(self, pos, env):
-        local_vars = [var.name for var in env.entries.values() if var.name]
-        items = [DictItemNode(pos, key=IdentifierStringNode(pos, value=var),
-                              value=NameNode(pos, name=var, allow_null=True))
-                 for var in local_vars]
+        items = [DictItemNode(
+            pos, key=IdentifierStringNode(pos, value=name),
+            value=NameNode(pos, name=name, entry=entry, allow_null=True))
+                 for name, entry in env.entries.iteritems()
+                 if not name.startswith('.')]
         DictNode.__init__(self, pos, key_value_pairs=items,
                           exclude_null_values=True)
 

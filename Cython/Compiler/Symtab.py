@@ -241,6 +241,7 @@ class Scope(object):
     is_py_class_scope = 0
     is_c_class_scope = 0
     is_closure_scope = 0
+    is_genexpr_scope = 0
     is_passthrough = 0
     is_cpp_class_scope = 0
     is_property_scope = 0
@@ -250,6 +251,7 @@ class Scope(object):
     in_cinclude = 0
     nogil = 0
     fused_to_specific = None
+    hidden_counter = 0
 
     def __init__(self, name, outer_scope, parent_scope):
         # The outer_scope is the next scope in the lookup chain.
@@ -350,6 +352,11 @@ class Scope(object):
             return '%s%d' % (name, count)
         else:
             return '%d' % count
+
+    def next_hidden_id(self):
+        counter = self.hidden_counter
+        self.hidden_counter = counter + 1
+        return '.%d' % counter
 
     def global_scope(self):
         # Return the module-level scope containing this scope.
@@ -721,6 +728,12 @@ class Scope(object):
     def lookup_here(self, name):
         # Look up in this scope only, return None if not found.
         return self.entries.get(name, None)
+
+    def lookup_only(self, name):
+        # Side-effect free recursive entry lookup.
+        return (self.lookup_here(name) or
+                (self.outer_scope and self.outer_scope.lookup_only(name)) or
+                None)
 
     def lookup_target(self, name):
         # Look up name in this scope only. Declare as Python
@@ -1515,28 +1528,43 @@ class GeneratorExpressionScope(Scope):
     to generators, these can be easily inlined in some cases, so all
     we really need is a scope that holds the loop variable(s).
     """
+
+    is_genexpr_scope = 1
+
     def __init__(self, outer_scope):
+        parent_scope = outer_scope
+        # Skip Py class scope
+        while outer_scope.is_py_class_scope:
+            outer_scope = outer_scope.outer_scope
+        # Master scope holds genexpr's entries
+        master_scope = outer_scope
+        while (master_scope.is_genexpr_scope or
+               master_scope.is_py_class_scope):
+            master_scope = master_scope.outer_scope
         name = outer_scope.global_scope().next_id(Naming.genexpr_id_ref)
-        Scope.__init__(self, name, outer_scope, outer_scope)
+        Scope.__init__(self, name, outer_scope, parent_scope)
         self.directives = outer_scope.directives
         self.genexp_prefix = "%s%d%s" % (Naming.pyrex_prefix, len(name), name)
+        self.master_scope = master_scope
 
     def mangle(self, prefix, name):
         return '%s%s' % (self.genexp_prefix, self.parent_scope.mangle(prefix, name))
 
-    def declare_var(self, name, type, pos,
-                    cname = None, visibility = 'private',
-                    api = 0, in_pxd = 0, is_cdef = True):
+    def declare_var(self, name, type, pos, cname=None, visibility='private',
+                    api=0, in_pxd=0, is_cdef=True):
         if type is unspecified_type:
             # if the outer scope defines a type for this variable, inherit it
-            outer_entry = self.outer_scope.lookup(name)
+            outer_entry = self.outer_scope.lookup_only(name)
             if outer_entry and outer_entry.is_variable:
                 type = outer_entry.type # may still be 'unspecified_type' !
         # the parent scope needs to generate code for the variable, but
         # this scope must hold its name exclusively
-        cname = '%s%s' % (self.genexp_prefix, self.parent_scope.mangle(Naming.var_prefix, name))
-        entry = self.declare(name, cname, type, pos, visibility)
-        entry.is_variable = 1
+        cname = '%s%s' % (self.genexp_prefix,
+                          self.parent_scope.mangle(Naming.var_prefix, name))
+        entry = self.master_scope.declare_var(
+            self.master_scope.next_hidden_id(), type, pos, cname,
+            visibility, api, in_pxd, is_cdef)
+        entry.name = name
         self.var_entries.append(entry)
         self.entries[name] = entry
         return entry

@@ -5511,6 +5511,7 @@ class ForInStatNode(LoopNode, StatNode):
 
     child_attrs = ["target", "iterator", "body", "else_clause"]
     item = None
+    parent_scope_iterator = False
 
     def analyse_declarations(self, env):
         self.target.analyse_target_declaration(env)
@@ -5520,8 +5521,14 @@ class ForInStatNode(LoopNode, StatNode):
 
     def analyse_expressions(self, env):
         import ExprNodes
+
+        if self.parent_scope_iterator:
+            iterator_scope = env.parent_scope
+        else:
+            iterator_scope = env
+
         self.target.analyse_target_types(env)
-        self.iterator.analyse_expressions(env)
+        self.iterator.analyse_expressions(iterator_scope)
         self.item = ExprNodes.NextNode(self.iterator)
         if (self.iterator.type.is_ptr or self.iterator.type.is_array) and \
             self.target.type.assignable_from(self.iterator.type):
@@ -7428,6 +7435,7 @@ class ParallelRangeNode(ParallelStatNode):
 
     child_attrs = ['body', 'target', 'else_clause', 'args', 'num_threads',
                    'chunksize']
+    parent_scope_iterator = False
 
     body = target = else_clause = args = None
 

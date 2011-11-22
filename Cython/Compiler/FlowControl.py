@@ -820,7 +820,13 @@ class CreateControlFlowGraph(CythonTransform):
         next_block = self.flow.newblock()
         # Condition with iterator
         self.flow.loops.append(LoopDescr(next_block, condition_block))
-        self.visit(node.iterator)
+        if node.parent_scope_iterator:
+            saved_env = self.env
+            self.env = saved_env.parent_scope
+            self.visit(node.iterator)
+            self.env = saved_env
+        else:
+            self.visit(node.iterator)
         # Target assignment
         self.flow.nextblock()
         self.mark_assignment(node.target)

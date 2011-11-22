@@ -2052,11 +2052,11 @@ class CreateClosureClasses(CythonTransform):
     def find_entries_used_in_closures(self, node):
         from_closure = []
         in_closure = []
-        for name, entry in node.local_scope.entries.items():
+        for entry in node.local_scope.entries.values():
             if entry.from_closure:
-                from_closure.append((name, entry))
+                from_closure.append((entry.name, entry))
             elif entry.in_closure:
-                in_closure.append((name, entry))
+                in_closure.append((entry.name, entry))
         return from_closure, in_closure
 
     def create_class_from_scope(self, node, target_module_scope, inner_node=None):
@@ -2368,9 +2368,8 @@ class TransformBuiltinMethods(EnvTransform):
                     function=ExprNodes.AttributeNode(
                         pos, obj=locals_dict, attribute="keys"),
                     args=[])
-            local_names = [ var.name for var in lenv.entries.values() if var.name ]
-            items = [ ExprNodes.IdentifierStringNode(pos, value=var)
-                      for var in local_names ]
+            items = [ExprNodes.IdentifierStringNode(pos, value=var)
+                     for var in lenv.entries.keys() if not var.startswith('.')]
             return ExprNodes.ListNode(pos, args=items)
 
     def _inject_eval(self, node, func_name):
