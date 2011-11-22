@@ -210,11 +210,14 @@ class PostParse(ScopeTrackingTransform):
         self.genexpr_counter += 1
         node.genexpr_name = EncodedString(u'genexpr%d' % genexpr_id)
 
+        loop = Nodes.ExprStatNode(
+            node.pos, expr=ExprNodes.GenExprScopeNode(
+                node.pos, loop=node.loop))
         node.def_node = Nodes.DefNode(node.pos, name=node.name,
                                       doc=None,
                                       args=[], star_arg=None,
                                       starstar_arg=None,
-                                      body=node.loop)
+                                      body=loop)
         self.visitchildren(node)
         return node
 

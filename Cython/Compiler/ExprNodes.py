@@ -5326,6 +5326,31 @@ class InlinedGeneratorExpressionNode(ScopedExprNode):
         self.loop.generate_execution_code(code)
 
 
+class GenExprScopeNode(ScopedExprNode):
+    # Manages genexp's scope
+    child_attrs = ["loop"]
+    has_local_scope = True
+
+    def analyse_scoped_declarations(self, env):
+        self.loop.parent_scope_iterator = True
+        self.loop.analyse_declarations(env)
+
+    def may_be_none(self):
+        return True
+
+    def annotate(self, code):
+        self.loop.annotate(code)
+
+    def analyse_scoped_expressions(self, env):
+        self.loop.analyse_expressions(env)
+
+    def result(self):
+        pass
+
+    def generate_evaluation_code(self, code):
+        self.loop.generate_execution_code(code)
+
+
 class SetNode(ExprNode):
     #  Set constructor.
 
