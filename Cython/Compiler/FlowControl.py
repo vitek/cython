@@ -558,6 +558,12 @@ class CreateControlFlowGraph(CythonTransform):
 
     in_inplace_assignment = False
 
+    def lookup(self, node, name):
+        """Initialize node's entry."""
+        if node.entry is None:
+            node.entry = self.env.lookup(name)
+        return node.entry
+
     def visit_ModuleNode(self, node):
         self.gv_ctx = GVContext()
 
@@ -654,10 +660,7 @@ class CreateControlFlowGraph(CythonTransform):
         if not rhs:
             rhs = object_expr
         if lhs.is_name:
-            if lhs.entry is not None:
-                entry = lhs.entry
-            else:
-                entry = self.env.lookup(lhs.name)
+            entry = self.lookup(lhs, lhs.name)
             if entry is None: # TODO: This shouldn't happen...
                 return
             self.flow.mark_assignment(lhs, rhs, entry)
@@ -717,7 +720,7 @@ class CreateControlFlowGraph(CythonTransform):
     def visit_DelStatNode(self, node):
         for arg in node.args:
             if arg.is_name:
-                entry = arg.entry or self.env.lookup(arg.name)
+                entry = self.lookup(arg, arg.name)
                 if entry.in_closure or entry.from_closure:
                     error(arg.pos,
                           "can not delete variable '%s' "
@@ -736,7 +739,7 @@ class CreateControlFlowGraph(CythonTransform):
 
     def visit_NameNode(self, node):
         if self.flow.block:
-            entry = node.entry or self.env.lookup(node.name)
+            entry = self.lookup(node, node.name)
             if entry:
                 self.flow.mark_reference(node, entry)
 
