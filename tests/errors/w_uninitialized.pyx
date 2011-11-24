@@ -74,6 +74,19 @@ def raise_stat():
     exc = ValueError
     msg = 'dummy'
 
+def defnode_decorator():
+    @foo
+    def bar():
+        pass
+    def foo():
+        pass
+
+def defnode_default():
+    def bar(arg=foo()):
+        pass
+    def foo():
+        pass
+
 _ERRORS = """
 6:11: local variable 'a' referenced before assignment
 12:12: local variable 'a' might be referenced before assignment
@@ -85,4 +98,6 @@ _ERRORS = """
 66:13: local variable 'foo' referenced before assignment
 71:17: local variable 'exc' referenced before assignment
 71:22: local variable 'msg' referenced before assignment
+78:4: local variable 'foo' referenced before assignment
+85:19: local variable 'foo' referenced before assignment
 """

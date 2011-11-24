@@ -589,6 +589,11 @@ class CreateControlFlowGraph(CythonTransform):
         return node
 
     def visit_FuncDefNode(self, node):
+        for arg in node.args:
+            if arg.default:
+                self.visitchildren(arg)
+        self.visitchildren(node, attrs=[attr for attr in node.child_attrs
+                                        if attr not in ('body', 'args')])
         self.env_stack.append(self.env)
         self.env = node.local_scope
         self.stack.append(self.flow)
@@ -603,6 +608,8 @@ class CreateControlFlowGraph(CythonTransform):
         # Function body block
         self.flow.nextblock()
 
+        for arg in node.args:
+            self.visit(arg)
         if node.star_arg:
             self.flow.mark_argument(node.star_arg,
                                     TypedExprNode(Builtin.tuple_type,
@@ -613,7 +620,7 @@ class CreateControlFlowGraph(CythonTransform):
                                     TypedExprNode(Builtin.dict_type,
                                                   may_be_none=False),
                                     node.starstar_arg.entry)
-        self.visitchildren(node)
+        self.visit(node.body)
         # Workaround for generators
         if node.is_generator:
             self.visit(node.gbody.body)
