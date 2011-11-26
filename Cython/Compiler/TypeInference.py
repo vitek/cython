@@ -226,6 +226,7 @@ class MarkAssignments(CythonTransform):
 
     def visit_ReturnStatNode(self, node):
         node.in_parallel = bool(self.parallel_block_stack)
+        self.visitchildren(node)
         return node
 
 
