@@ -200,7 +200,6 @@ class IterationTransform(Visitor.VisitorTransform):
                     # CPython raises an error here: not a sequence
                     return node
                 return self._transform_reversed_iteration(node, iterator)
-
         # range() iteration?
         if Options.convert_range and node.target.type.is_int:
             if iterator.self is None and function.is_name and \
@@ -1267,16 +1266,16 @@ class EarlyReplaceBuiltinCalls(Visitor.EnvTransform):
 
         visit_Node = Visitor.TreeVisitor.visitchildren
         # XXX: disable inlining while it's not back supported
-        def __visit_YieldExprNode(self, node):
+        def visit_YieldExprNode(self, node):
             self.yield_nodes.append(node)
             self.visitchildren(node)
 
-        def __visit_ExprStatNode(self, node):
+        def visit_ExprStatNode(self, node):
             self.visitchildren(node)
             if node.expr in self.yield_nodes:
                 self.yield_stat_nodes[node.expr] = node
 
-        def __visit_GeneratorExpressionNode(self, node):
+        def visit_GeneratorExpressionNode(self, node):
             # enable when we support generic generator expressions
             #
             # everything below this node is out of scope
@@ -1338,11 +1337,13 @@ class EarlyReplaceBuiltinCalls(Visitor.EnvTransform):
             return node
         if not isinstance(pos_args[0], ExprNodes.GeneratorExpressionNode):
             return node
-        gen_expr_node = pos_args[0]
+        gen_expr_node = pos_args[0].genexpr_scope_node
         loop_node = gen_expr_node.loop
         yield_expression, yield_stat_node = self._find_single_yield_expression(loop_node)
         if yield_expression is None:
             return node
+
+        gen_expr_node.scope_inline()
 
         if is_any:
             condition = yield_expression
@@ -1402,11 +1403,13 @@ class EarlyReplaceBuiltinCalls(Visitor.EnvTransform):
             listcomp_node = pos_args[0]
             loop_node = listcomp_node.loop
         elif isinstance(pos_args[0], ExprNodes.GeneratorExpressionNode):
-            gen_expr_node = pos_args[0]
+            gen_expr_node = pos_args[0].genexpr_scope_node
             loop_node = gen_expr_node.loop
             yield_expression, yield_stat_node = self._find_single_yield_expression(loop_node)
             if yield_expression is None:
                 return node
+
+            gen_expr_node.scope_inline()
 
             target = ExprNodes.ListNode(node.pos, args = [])
             append_node = ExprNodes.ComprehensionAppendNode(
@@ -1457,6 +1460,8 @@ class EarlyReplaceBuiltinCalls(Visitor.EnvTransform):
             yield_expression, yield_stat_node = self._find_single_yield_expression(loop_node)
             if yield_expression is None:
                 return node
+            gen_expr_node = gen_expr_node.genexpr_scope_node
+            gen_expr_node.scope_inline()
         else: # ComprehensionNode
             yield_stat_node = gen_expr_node.append
             yield_expression = yield_stat_node.expr
@@ -1566,12 +1571,14 @@ class EarlyReplaceBuiltinCalls(Visitor.EnvTransform):
             return node
         if not isinstance(pos_args[0], ExprNodes.GeneratorExpressionNode):
             return node
-        gen_expr_node = pos_args[0]
+        gen_expr_node = pos_args[0].genexpr_scope_node
         loop_node = gen_expr_node.loop
 
         yield_expression, yield_stat_node = self._find_single_yield_expression(loop_node)
         if yield_expression is None:
             return node
+
+        gen_expr_node.scope_inline()
 
         target_node = container_node_class(node.pos, args=[])
         append_node = ExprNodes.ComprehensionAppendNode(
@@ -1600,7 +1607,7 @@ class EarlyReplaceBuiltinCalls(Visitor.EnvTransform):
             return node
         if not isinstance(pos_args[0], ExprNodes.GeneratorExpressionNode):
             return node
-        gen_expr_node = pos_args[0]
+        gen_expr_node = pos_args[0].genexpr_scope_node
         loop_node = gen_expr_node.loop
 
         yield_expression, yield_stat_node = self._find_single_yield_expression(loop_node)
@@ -1611,6 +1618,8 @@ class EarlyReplaceBuiltinCalls(Visitor.EnvTransform):
             return node
         if len(yield_expression.args) != 2:
             return node
+
+        gen_expr_node.scope_inline()
 
         target_node = ExprNodes.DictNode(node.pos, key_value_pairs=[])
         append_node = ExprNodes.DictComprehensionAppendNode(

@@ -219,6 +219,7 @@ class Scope(object):
     # pyfunc_entries    [Entry]            Python function entries
     # cfunc_entries     [Entry]            C function entries
     # c_class_entries   [Entry]            All extension type entries
+    # lambda_entries    [Entry]            Lambda function entries
     # cname_to_entry    {string : Entry}   Temp cname to entry mapping
     # return_type       PyrexType or None  Return type of function owning scope
     # is_builtin_scope  boolean            Is the builtin scope of Python/Cython
@@ -275,6 +276,7 @@ class Scope(object):
         self.var_entries = []
         self.pyfunc_entries = []
         self.cfunc_entries = []
+        self.lambda_entries = []
         self.c_class_entries = []
         self.defined_c_classes = []
         self.imported_c_classes = {}
@@ -626,6 +628,7 @@ class Scope(object):
         entry.func_cname = func_cname
         entry.signature = pyfunction_signature
         entry.is_anonymous = True
+        self.lambda_entries.append(entry)
         return entry
 
     def add_lambda_def(self, def_node):

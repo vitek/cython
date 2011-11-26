@@ -41,9 +41,9 @@ pyregr.test_zipfile64
 pyregr.test_tuple
 
 # Inlined generators
-all
-any
-builtin_sorted
-dictcomp
-inlined_generator_expressions
-setcomp
+#all
+#any
+#builtin_sorted
+#dictcomp
+#inlined_generator_expressions
+#setcomp

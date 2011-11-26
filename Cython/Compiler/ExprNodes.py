@@ -5350,6 +5350,24 @@ class GenExprScopeNode(ScopedExprNode):
     def generate_evaluation_code(self, code):
         self.loop.generate_execution_code(code)
 
+    def scope_inline(self):
+        """Move entries to outer scope."""
+        old_master = self.expr_scope.master_scope
+        new_master = old_master.outer_scope
+
+        self.expr_scope.master_scope = new_master
+        self.expr_scope.parent_scope = new_master
+        self.expr_scope.outer_scope = new_master
+
+        for name, entry in self.expr_scope.entries.iteritems():
+            entry.scope = new_master
+            new_master.entries[new_master.next_hidden_id()] = entry
+            new_master.var_entries.append(entry)
+
+        for entry in old_master.lambda_entries:
+            entry.scope = new_master
+            new_master.lambda_entries.append(entry)
+
 
 class SetNode(ExprNode):
     #  Set constructor.
@@ -6204,11 +6222,11 @@ class LambdaNode(InnerFunctionNode):
         self.def_node.analyse_declarations(env)
         self.def_node.is_cyfunction = True
         self.pymethdef_cname = self.def_node.entry.pymethdef_cname
-        env.add_lambda_def(self.def_node)
 
     def analyse_types(self, env):
         self.def_node.analyse_expressions(env)
         super(LambdaNode, self).analyse_types(env)
+        env.add_lambda_def(self.def_node)
 
     def generate_result_code(self, code):
         self.def_node.generate_execution_code(code)
@@ -6242,6 +6260,10 @@ class GeneratorExpressionNode(LambdaNode):
                 self.self_result_code(),
                 code.error_goto_if_null(self.result(), self.pos)))
         code.put_gotref(self.py_result())
+
+    @property
+    def genexpr_scope_node(self):
+        return self.def_node.gbody.body.expr
 
 
 class YieldExprNode(ExprNode):

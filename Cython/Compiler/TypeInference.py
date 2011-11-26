@@ -16,6 +16,7 @@ class TypedExprNode(ExprNodes.ExprNode):
 object_expr = TypedExprNode(py_object_type)
 
 class MarkAssignments(CythonTransform):
+    # TODO: Use assignments collected by CreateControlFlowGraph
 
     # tells us whether we're in a normal loop
     in_loop = False
@@ -28,6 +29,10 @@ class MarkAssignments(CythonTransform):
 
         # Track the parallel block scopes (with parallel, for i in prange())
         self.parallel_block_stack = []
+
+    def visit_Node(self, node):
+        self.visitchildren(node)
+        return node
 
     def mark_assignment(self, lhs, rhs, inplace_op=None):
         if isinstance(lhs, (ExprNodes.NameNode, Nodes.PyArgDeclNode)):
@@ -71,11 +76,13 @@ class MarkAssignments(CythonTransform):
         return node
 
     def visit_SingleAssignmentNode(self, node):
+        self.visit(node.rhs)
         self.mark_assignment(node.lhs, node.rhs)
         self.visitchildren(node)
         return node
 
     def visit_CascadedAssignmentNode(self, node):
+        self.visit(node.rhs)
         for lhs in node.lhs_list:
             self.mark_assignment(lhs, node.rhs)
         self.visitchildren(node)
