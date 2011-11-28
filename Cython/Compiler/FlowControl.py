@@ -24,6 +24,9 @@ class TypedExprNode(ExprNodes.ExprNode):
 
 object_expr = TypedExprNode(py_object_type, may_be_none=True)
 object_expr_not_none = TypedExprNode(py_object_type, may_be_none=False)
+# Dummy rhs expression will be removed from cf_assignments
+dummy_rhs_expr = TypedExprNode(py_object_type)
+
 
 class ControlBlock(object):
     """Control flow graph node. Sequence of assignments and name references.
@@ -165,9 +168,9 @@ class ControlFlow(object):
             self.block.gen[entry] = assignment
             self.entries.add(entry)
 
-    def mark_argument(self, lhs, rhs, entry):
+    def mark_argument(self, lhs, rhs, entry, is_starred_arg=False):
         if self.block and self.is_tracked(entry):
-            assignment = Argument(lhs, rhs, entry)
+            assignment = Argument(lhs, rhs, entry, is_starred_arg)
             self.block.stats.append(assignment)
             self.block.gen[entry] = assignment
             self.entries.add(entry)
@@ -303,14 +306,16 @@ class NameAssignment(object):
         self.pos = lhs.pos
         self.refs = set()
         self.is_arg = False
+        self.is_starred_arg = False
 
     def __repr__(self):
         return '%s(entry=%r)' % (self.__class__.__name__, self.entry)
 
 class Argument(NameAssignment):
-    def __init__(self, lhs, rhs, entry):
+    def __init__(self, lhs, rhs, entry, is_starred_arg):
         NameAssignment.__init__(self, lhs, rhs, entry)
         self.is_arg = True
+        self.is_starred_arg = is_starred_arg
 
 class Uninitialized(object):
     pass
@@ -441,7 +446,12 @@ def check_definitions(flow, compiler_directives):
                 else:
                     i_state |= i_assmts.bit
                 assignments.add(stat)
-                stat.entry.cf_assignments.append(stat)
+                if stat.rhs is None: # Deletion, emulate MarkAssignments
+                    stat.entry.cf_assignments.append(
+                        NameAssignment(stat.lhs, stat.lhs, stat.entry))
+                elif (stat.rhs is not dummy_rhs_expr and
+                      (not stat.is_arg or stat.is_starred_arg)):
+                    stat.entry.cf_assignments.append(stat)
             elif isinstance(stat, NameReference):
                 references[stat.node] = stat.entry
                 stat.entry.cf_references.append(stat)
@@ -553,9 +563,7 @@ class AssignmentCollector(TreeVisitor):
             self.assignments.append((lhs, node.rhs))
 
 
-class CreateControlFlowGraph(CythonTransform):
-    """Create NameNode use and assignment graph."""
-
+class ControlFlowAnalysis(CythonTransform):
     in_inplace_assignment = False
 
     def lookup(self, node, name):
@@ -614,12 +622,12 @@ class CreateControlFlowGraph(CythonTransform):
             self.flow.mark_argument(node.star_arg,
                                     TypedExprNode(Builtin.tuple_type,
                                                   may_be_none=False),
-                                    node.star_arg.entry)
+                                    node.star_arg.entry, True)
         if node.starstar_arg:
             self.flow.mark_argument(node.starstar_arg,
                                     TypedExprNode(Builtin.dict_type,
                                                   may_be_none=False),
-                                    node.starstar_arg.entry)
+                                    node.starstar_arg.entry, True)
         self.visit(node.body)
         # Workaround for generators
         if node.is_generator:
@@ -741,7 +749,8 @@ class CreateControlFlowGraph(CythonTransform):
         entry = self.env.lookup(node.name)
         if entry:
             may_be_none = not node.not_none
-            self.flow.mark_argument(node, TypedExprNode(entry.type, may_be_none), entry)
+            self.flow.mark_argument(
+                node, TypedExprNode(entry.type, may_be_none), entry)
         return node
 
     def visit_NameNode(self, node):
@@ -825,6 +834,40 @@ class CreateControlFlowGraph(CythonTransform):
             self.flow.block = None
         return node
 
+    def mark_forinloop_target(self, node):
+        is_special = False
+        sequence = node.iterator.sequence
+        if isinstance(sequence, ExprNodes.SimpleCallNode):
+            function = sequence.function
+            if sequence.self is None and function.is_name:
+                if function.name == 'reversed' and len(sequence.args) == 1:
+                    sequence = sequence.args[0]
+        if isinstance(sequence, ExprNodes.SimpleCallNode):
+            function = sequence.function
+            if sequence.self is None and function.is_name:
+                if function.name in ('range', 'xrange'):
+                    is_special = True
+                    for arg in sequence.args[:2]:
+                        self.mark_assignment(node.target, arg)
+                    if len(sequence.args) > 2:
+                        self.mark_assignment(
+                            node.target,
+                            ExprNodes.binop_node(node.pos,
+                                                 '+',
+                                                 sequence.args[0],
+                                                 sequence.args[2]))
+
+        if not is_special:
+            # A for-loop basically translates to subsequent calls to
+            # __getitem__(), so using an IndexNode here allows us to
+            # naturally infer the base type of pointers, C arrays,
+            # Python strings, etc., while correctly falling back to an
+            # object type when the base type cannot be handled.
+            self.mark_assignment(node.target, ExprNodes.IndexNode(
+                node.pos,
+                base = sequence,
+                index = ExprNodes.IntNode(node.pos, value = '0')))
+
     def visit_ForInStatNode(self, node):
         condition_block = self.flow.nextblock()
         next_block = self.flow.newblock()
@@ -839,7 +882,11 @@ class CreateControlFlowGraph(CythonTransform):
             self.visit(node.iterator)
         # Target assignment
         self.flow.nextblock()
-        self.mark_assignment(node.target)
+
+        if isinstance(node, Nodes.ForInStatNode):
+            self.mark_forinloop_target(node)
+        else: # Parallel
+            self.mark_assignment(node.target)
 
         # Body block
         if isinstance(node, Nodes.ParallelRangeNode):
@@ -913,8 +960,11 @@ class CreateControlFlowGraph(CythonTransform):
             self.visit(node.step)
         # Target assignment
         self.flow.nextblock()
-        self.mark_assignment(node.target)
-
+        self.mark_assignment(node.target, node.bound1)
+        if node.step is not None:
+            self.mark_assignment(node.target,
+                                 ExprNodes.binop_node(node.pos, '+',
+                                                      node.bound1, node.step))
         # Body block
         self.flow.nextblock()
         self.visit(node.body)
@@ -1137,6 +1187,6 @@ class CreateControlFlowGraph(CythonTransform):
     def visit_AmpersandNode(self, node):
         if node.operand.is_name:
             # Fake assignment to silence warning
-            self.mark_assignment(node.operand)
+            self.mark_assignment(node.operand, dummy_rhs_expr)
         self.visitchildren(node)
         return node

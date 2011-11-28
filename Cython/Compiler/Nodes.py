@@ -1537,9 +1537,8 @@ class FuncDefNode(StatNode, BlockNode):
         is_cdef = isinstance(self, CFuncDefNode)
         for entry in lenv.arg_entries:
             if entry.type.is_pyobject:
-                if (acquire_gil or entry.assignments) and not entry.in_closure:
+                if (acquire_gil or entry.cf_assignments) and not entry.in_closure:
                     code.put_var_incref(entry)
-
             # Note: defaults are always increffed. For def functions, we
             #       we aquire arguments from object converstion, so we have
             #       new references. If we are a cdef function, we need to
@@ -1698,7 +1697,7 @@ class FuncDefNode(StatNode, BlockNode):
         # Decref any increfed args
         for entry in lenv.arg_entries:
             if entry.type.is_pyobject:
-                if (acquire_gil or entry.assignments) and not entry.in_closure:
+                if (acquire_gil or entry.cf_assignments) and not entry.in_closure:
                     code.put_var_decref(entry)
             if entry.type.is_memoryviewslice:
                 code.put_xdecref_memoryviewslice(entry.cname,
