@@ -2125,6 +2125,8 @@ class CreateClosureClasses(CythonTransform):
                                     type=cscope.scope_class.type,
                                     is_cdef=True)
             node.needs_outer_scope = True
+        do_local_copy = self.current_directives.get(
+            'optimize.closure.local_copy')
         for name, entry in in_closure:
             closure_entry = class_scope.declare_var(pos=entry.pos,
                                     name=entry.name,
@@ -2133,6 +2135,13 @@ class CreateClosureClasses(CythonTransform):
                                     is_cdef=True)
             if entry.is_declared_generic:
                 closure_entry.is_declared_generic = 1
+            if (do_local_copy and entry.cf_references and
+                (entry.is_local or entry.is_arg)):
+                if not (entry.type.is_array or
+                        entry.type.is_struct_or_union or
+                        entry.type.is_cpp_class):
+                    entry.local_copy = Naming.local_copy_cname + entry.name
+
         node.needs_closure = True
         # Do it here because other classes are already checked
         target_module_scope.check_c_class(func_scope.scope_class)

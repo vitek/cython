@@ -113,6 +113,9 @@ directive_defaults = {
     'control_flow.dot_output': "", # Graphviz output filename
     'control_flow.dot_annotate_defs': False, # Annotate definitions
 
+# optimization directives
+    'optimize.closure.local_copy': True,
+
 # test support
     'test_assert_path_exists' : [],
     'test_fail_if_path_exists' : [],

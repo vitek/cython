@@ -1638,7 +1638,7 @@ class NameNode(AtomicExprNode):
         entry = self.entry
         if not entry:
             return "<error>" # There was an error earlier
-        return entry.cname
+        return entry.local_copy or entry.cname
 
     def generate_result_code(self, code):
         assert hasattr(self, 'entry')
@@ -1793,6 +1793,8 @@ class NameNode(AtomicExprNode):
                     print("NameNode.generate_assignment_code:")
                     print("...generating post-assignment code for %s" % rhs)
                 rhs.generate_post_assignment_code(code)
+                if entry.local_copy:
+                    code.putln('%s = %s;' % (entry.cname, self.result()))
             elif rhs.result_in_temp():
                 rhs.generate_post_assignment_code(code)
 
@@ -1857,6 +1859,8 @@ class NameNode(AtomicExprNode):
                 if self.entry.type.is_pyobject:
                     code.put_decref(self.result(), self.ctype())
                     code.putln('%s = NULL;' % self.result())
+                    if self.entry.local_copy:
+                        code.putln('%s = NULL;' % self.cname)
                 else:
                     code.put_xdecref_memoryviewslice(self.entry.cname,
                                                      have_gil=not self.nogil)

@@ -1461,7 +1461,16 @@ class FuncDefNode(StatNode, BlockNode):
         for entry in lenv.var_entries:
             if not entry.in_closure:
                 code.put_var_declaration(entry)
-
+            elif entry.local_copy:
+                if not self.is_generator:
+                    code.putln('%s;' %
+                               entry.type.declaration_code(entry.local_copy))
+        for entry in lenv.arg_entries:
+            if entry.local_copy:
+                if self.is_generator:
+                    code.put('CYTHON_UNUSED ')
+                code.putln('%s;' %
+                           entry.type.declaration_code(entry.local_copy))
         # Initialize the return variable __pyx_r
         init = ""
         if not self.return_type.is_void:
@@ -1557,6 +1566,9 @@ class FuncDefNode(StatNode, BlockNode):
             if entry.type.is_pyobject:
                 if (acquire_gil or entry.assignments) and not entry.in_closure:
                     code.put_var_incref(entry)
+                if entry.local_copy:
+                    code.putln('%s = %s;' % (entry.local_copy,
+                                             entry.cname))
 
             # Note: defaults are always increffed. For def functions, we
             #       we aquire arguments from object converstion, so we have
@@ -1565,6 +1577,12 @@ class FuncDefNode(StatNode, BlockNode):
             if is_cdef and entry.type.is_memoryviewslice:
                 code.put_incref_memoryviewslice(entry.cname,
                                                 have_gil=not lenv.nogil)
+
+        for entry in lenv.var_entries:
+            if entry.local_copy:
+                if not self.is_generator:
+                    code.putln('%s = %s;' % (entry.local_copy,
+                                             entry.cname))
 
         # ----- Initialise local buffer auxiliary variables
         for entry in lenv.var_entries + lenv.arg_entries:
@@ -3898,6 +3916,13 @@ class GeneratorBodyDefNode(DefNode):
                 lenv.scope_class.type.declaration_code(Naming.cur_scope_cname),
                 lenv.scope_class.type.cast_code('%s->closure' %
                                                 Naming.generator_cname)))
+        # ----- Initialize local copies
+        for entry in lenv.var_entries + lenv.arg_entries:
+            if entry.local_copy:
+                closure_init_code.putln('%s = %s;' % (
+                    entry.type.declaration_code(entry.local_copy),
+                    entry.cname))
+
         code.putln('PyErr_SetNone(PyExc_StopIteration); %s' % code.error_goto(self.pos))
         # ----- Error cleanup
         if code.error_label in code.labels_used:

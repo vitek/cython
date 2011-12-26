@@ -50,6 +50,7 @@ closure_class_prefix = pyrex_prefix + "scope_struct_"
 lambda_func_prefix = pyrex_prefix + "lambda_"
 module_is_main   = pyrex_prefix + "module_is_main_"
 defaults_struct_prefix = pyrex_prefix + "defaults"
+local_copy_cname   = pyrex_prefix + "lcopy_"
 dynamic_args_cname = pyrex_prefix + "dynamic_args"
 
 args_cname       = pyrex_prefix + "args"
