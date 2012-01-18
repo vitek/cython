@@ -3242,6 +3242,15 @@ class FinalOptimizePhase(Visitor.CythonTransform):
         - isinstance -> typecheck for cdef types
         - eliminate checks for None and/or types that became redundant after tree changes
     """
+    def visit_ModuleNode(self, node):
+        self.visitchildren(node)
+        node.helper_items = 0
+        for index, entry in enumerate(node.scope.entries.itervalues()):
+            entry.lookup_index = index
+            node.helper_items += 1
+        return node
+
+
     def visit_SingleAssignmentNode(self, node):
         """Avoid redundant initialisation of local variables before their
         first assignment.

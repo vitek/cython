@@ -1681,13 +1681,24 @@ class NameNode(AtomicExprNode):
                 namespace = Naming.builtins_cname
             else: # entry.is_pyglobal
                 namespace = entry.scope.namespace_cname
-            code.globalstate.use_utility_code(get_name_interned_utility_code)
-            code.putln(
-                '%s = __Pyx_GetName(%s, %s); %s' % (
-                self.result(),
-                namespace,
-                interned_cname,
-                code.error_goto_if_null(self.result(), self.pos)))
+            if entry.lookup_index is not None:
+                code.globalstate.use_utility_code(
+                    module_lookup_helper_utility_code)
+                code.putln(
+                    '%s = __Pyx_Module_GetName(%s, %s); %s' % (
+                        self.result(),
+                        interned_cname,
+                        entry.lookup_index,
+                        code.error_goto_if_null(self.result(), self.pos)))
+            else:
+                code.globalstate.use_utility_code(
+                    get_name_interned_utility_code)
+                code.putln(
+                    '%s = __Pyx_GetName(%s, %s); %s' % (
+                        self.result(),
+                        namespace,
+                        interned_cname,
+                        code.error_goto_if_null(self.result(), self.pos)))
             code.put_gotref(self.py_result())
 
         elif entry.is_local or entry.in_closure or entry.from_closure:
@@ -10038,4 +10049,16 @@ generator_utility_code = UtilityCode.load(
     "Generator",
     "Generator.c",
     requires=[Nodes.raise_utility_code, Nodes.swap_exception_utility_code],
+)
+
+dict_lookup_helper_utility_code = UtilityCode.load(
+    "DictLookupHelper",
+    "DictLookupHelper.c",
+    requires=[],
+)
+
+module_lookup_helper_utility_code = UtilityCode.load(
+    "ModuleLookupHelper",
+    "DictLookupHelper.c",
+    requires=[dict_lookup_helper_utility_code],
 )

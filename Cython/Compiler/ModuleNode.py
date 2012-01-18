@@ -1784,6 +1784,12 @@ class ModuleNode(Nodes.Node, Nodes.BlockNode):
         code.putln("/*--- Module creation code ---*/")
         self.generate_module_creation_code(env, code)
 
+        if self.helper_items:
+            code.putln('#ifdef __Pyx_ModuleLookupHelper_USED')
+            code.putln("if (__Pyx_ModuleLookupHelper_Init(%d)) %s" % (
+                self.helper_items, code.error_goto(self.pos)))
+            code.putln('#endif')
+
         code.putln("/*--- Initialize various global constants etc. ---*/")
         code.putln(code.error_goto_if_neg("__Pyx_InitGlobals()", self.pos))
 

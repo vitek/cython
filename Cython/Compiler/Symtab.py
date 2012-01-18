@@ -185,6 +185,7 @@ class Entry(object):
     from_cython_utility_code = None
     error_on_uninitialized = False
     cf_used = True
+    lookup_index = None
 
     def __init__(self, name, cname, type, pos = None, init = None):
         self.name = name
