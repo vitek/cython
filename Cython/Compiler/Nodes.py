@@ -4046,7 +4046,7 @@ class GeneratorBodyDefNode(DefNode):
                 lenv.scope_class.type.declaration_code(Naming.cur_scope_cname),
                 lenv.scope_class.type.cast_code('%s->closure' %
                                                 Naming.generator_cname)))
-        code.putln('PyErr_SetNone(PyExc_StopIteration); %s' % code.error_goto(self.pos))
+        code.putln('PyErr_SetNone(PyExc_StopIteration);')
         # ----- Error cleanup
         if code.error_label in code.labels_used:
             code.put_goto(code.return_label)
