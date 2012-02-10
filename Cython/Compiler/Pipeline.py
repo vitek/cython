@@ -187,8 +187,8 @@ def create_pipeline(context, mode, exclude_classes=()):
         MarkOverflowingArithmetic(context),
         IntroduceBufferAuxiliaryVars(context),
         _check_c_declarations,
-        InlineDefNodeCalls(context),
         AnalyseExpressionsTransform(context),
+        InlineDefNodeCalls(context),
         FindInvalidUseOfFusedTypes(context),
         CreateClosureClasses(context),  ## After all lookups and type inference
         ExpandInplaceOperators(context),

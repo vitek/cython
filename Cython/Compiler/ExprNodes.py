@@ -3596,9 +3596,9 @@ class SimpleCallNode(CallNode):
 
         func_type = self.function_type()
         if func_type.is_pyobject:
-            self.arg_tuple = TupleNode(self.pos, args = self.args)
-            self.arg_tuple.analyse_types(env)
-            self.args = None
+            for arg in self.args:
+                arg.analyse_types(env)
+
             if func_type is Builtin.type_type and function.is_name and \
                    function.entry and \
                    function.entry.is_builtin and \
@@ -3643,6 +3643,13 @@ class SimpleCallNode(CallNode):
                 # Insert coerced 'self' argument into argument list.
                 self.args.insert(0, self.coerced_self)
             self.analyse_c_function_call(env)
+
+    def finalize_expressions(self, env):
+        func_type = self.function_type()
+        if func_type.is_pyobject and self.args is not None:
+            self.arg_tuple = TupleNode(self.pos, args=self.args)
+            self.arg_tuple.analyse_types(env)
+            self.args = None
 
     def function_type(self):
         # Return the type of the function being called, coercing a function

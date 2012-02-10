@@ -1643,7 +1643,7 @@ class EarlyReplaceBuiltinCalls(Visitor.EnvTransform):
             return node
         return kwargs
 
-class InlineDefNodeCalls(Visitor.CythonTransform):
+class InlineDefNodeCalls(Visitor.EnvTransform):
     visit_Node = Visitor.VisitorTransform.recurse_to_children
 
     def visit_SimpleCallNode(self, node):
@@ -1663,6 +1663,7 @@ class InlineDefNodeCalls(Visitor.CythonTransform):
             node.pos, function_name=function_name,
             function=function, args=node.args)
         if inlined.can_be_inlined():
+            inlined.analyse_types(self.current_env())
             return inlined
         return node
 
@@ -1697,7 +1698,7 @@ class OptimizeBuiltinCalls(Visitor.EnvTransform):
     def visit_SimpleCallNode(self, node):
         self.visitchildren(node)
         function = node.function
-        if function.type.is_pyobject:
+        if node.arg_tuple:
             arg_tuple = node.arg_tuple
             if not isinstance(arg_tuple, ExprNodes.TupleNode):
                 return node
