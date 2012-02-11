@@ -2123,9 +2123,14 @@ class OptimizeBuiltinCalls(Visitor.EnvTransform):
             is_temp = False)
         return ExprNodes.CastNode(node, PyrexTypes.py_object_type)
 
+    Py_type_check_method_type = PyrexTypes.CFuncType(
+        PyrexTypes.c_bint_type, [
+            PyrexTypes.CFuncTypeArg("object", PyrexTypes.py_object_type, None)
+            ])
     Py_type_check_func_type = PyrexTypes.CFuncType(
         PyrexTypes.c_bint_type, [
-            PyrexTypes.CFuncTypeArg("arg", PyrexTypes.py_object_type, None)
+            PyrexTypes.CFuncTypeArg("object", PyrexTypes.py_object_type, None),
+            PyrexTypes.CFuncTypeArg("type", PyrexTypes.py_object_type, None)
             ])
 
     def _handle_simple_function_isinstance(self, node, pos_args):
@@ -2160,14 +2165,16 @@ class OptimizeBuiltinCalls(Visitor.EnvTransform):
                     continue
                 tests.append(type_check_function)
                 type_check_args = [arg]
+                type_check_type = self.Py_type_check_method_type
             elif test_type_node.type is Builtin.type_type:
                 type_check_function = '__Pyx_TypeCheck'
                 type_check_args = [arg, test_type_node]
+                type_check_type = self.Py_type_check_func_type
             else:
                 return node
             test_nodes.append(
                 ExprNodes.PythonCapiCallNode(
-                    test_type_node.pos, type_check_function, self.Py_type_check_func_type,
+                    test_type_node.pos, type_check_function, type_check_type,
                     args = type_check_args,
                     is_temp = True,
                     ))
