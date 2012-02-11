@@ -8838,6 +8838,9 @@ class CastNode(CoercionNode):
     def generate_result_code(self, code):
         self.arg.generate_result_code(code)
 
+    def analyse_types(self, env):
+        pass
+
 
 class PyTypeTestNode(CoercionNode):
     #  This node is used to check that a generic Python
