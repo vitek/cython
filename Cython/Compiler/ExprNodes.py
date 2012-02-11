@@ -4071,6 +4071,13 @@ class PythonCapiCallNode(SimpleCallNode):
         # attributes above with explicit keyword arguments if required
         SimpleCallNode.__init__(self, pos, **kwargs)
 
+    def finalize_expressions(self, env):
+        func_type = self.function_type()
+        for index, arg in enumerate(self.args):
+            arg_type = func_type.args[index].type
+            if arg.type != arg_type:
+                self.args[index] = arg.coerce_to(arg_type, env)
+
 
 class GeneralCallNode(CallNode):
     #  General Python function call, including keyword,
