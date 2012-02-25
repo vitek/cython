@@ -131,6 +131,7 @@ def create_pipeline(context, mode, exclude_classes=()):
     from ParseTreeTransforms import ExpandInplaceOperators, ParallelRangeTransform
     from TypeInference import MarkAssignments, MarkOverflowingArithmetic
     from ParseTreeTransforms import AdjustDefByDirectives, AlignFunctionDefinitions
+    from ParseTreeTransforms import FinalizeExpressionsTransform
     from ParseTreeTransforms import RemoveUnreachableCode, GilCheck
     from FlowControl import ControlFlowAnalysis
     from AnalysedTreeTransforms import AutoTestDictTransform
@@ -192,6 +193,7 @@ def create_pipeline(context, mode, exclude_classes=()):
         CreateClosureClasses(context),  ## After all lookups and type inference
         ExpandInplaceOperators(context),
         OptimizeBuiltinCalls(context),  ## Necessary?
+        FinalizeExpressionsTransform(context),
         IterationTransform(),
         SwitchTransform(),
         DropRefcountingTransform(),

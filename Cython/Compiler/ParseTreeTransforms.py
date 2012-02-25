@@ -1786,6 +1786,15 @@ class AnalyseExpressionsTransform(CythonTransform):
         return node
 
 
+class FinalizeExpressionsTransform(EnvTransform):
+    def visit_Node(self, node):
+        finalize = getattr(node, 'finalize_expressions', None)
+        if finalize:
+            finalize(self.current_env())
+        self.visitchildren(node)
+        return node
+
+
 class FindInvalidUseOfFusedTypes(CythonTransform):
 
     def visit_FuncDefNode(self, node):
