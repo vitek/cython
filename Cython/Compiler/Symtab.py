@@ -811,6 +811,12 @@ class Scope(object):
         have_entries = py_attrs or py_buffers or memoryview_slices
         return have_entries, (py_attrs, py_buffers, memoryview_slices)
 
+    def purge_entry(self, entry):
+        if entry.name in self.entries:
+            del self.entries[entry.name]
+            self.var_entries = [e for e in self.var_entries
+                                if e is not entry]
+
 
 class PreImportScope(Scope):
 

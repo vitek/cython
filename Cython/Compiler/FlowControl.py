@@ -160,11 +160,11 @@ class ControlFlow(object):
         if self.block:
             self.block.positions.add(node.pos[:2])
 
-    def mark_assignment(self, lhs, rhs, entry):
+    def mark_assignment(self, lhs, rhs, entry, is_inplace=False):
         if self.block:
             if not self.is_tracked(entry):
                 return
-            assignment = NameAssignment(lhs, rhs, entry)
+            assignment = NameAssignment(lhs, rhs, entry, is_inplace)
             self.block.stats.append(assignment)
             self.block.gen[entry] = assignment
             self.entries.add(entry)
@@ -299,7 +299,7 @@ class ExceptionDescr(object):
 
 
 class NameAssignment(object):
-    def __init__(self, lhs, rhs, entry):
+    def __init__(self, lhs, rhs, entry, is_inplace=False):
         if lhs.cf_state is None:
             lhs.cf_state = set()
         self.lhs = lhs
@@ -309,6 +309,7 @@ class NameAssignment(object):
         self.refs = set()
         self.is_arg = False
         self.is_deletion = False
+        self.is_inplace = is_inplace
 
     def __repr__(self):
         return '%s(entry=%r)' % (self.__class__.__name__, self.entry)
@@ -711,7 +712,8 @@ class ControlFlowAnalysis(CythonTransform):
                 entry = self.env.lookup(lhs.name)
             if entry is None: # TODO: This shouldn't happen...
                 return
-            self.flow.mark_assignment(lhs, rhs, entry)
+            self.flow.mark_assignment(
+                lhs, rhs, entry, is_inplace=self.in_inplace_assignment)
         elif isinstance(lhs, ExprNodes.SequenceNode):
             for arg in lhs.args:
                 self.mark_assignment(arg)
@@ -761,8 +763,8 @@ class ControlFlowAnalysis(CythonTransform):
     def visit_InPlaceAssignmentNode(self, node):
         self.in_inplace_assignment = True
         self.visitchildren(node)
-        self.in_inplace_assignment = False
         self.mark_assignment(node.lhs, node.create_binop_node())
+        self.in_inplace_assignment = False
         return node
 
     def visit_DelStatNode(self, node):
@@ -1231,5 +1233,11 @@ class ControlFlowAnalysis(CythonTransform):
         if node.operand.is_name:
             # Fake assignment to silence warning
             self.mark_assignment(node.operand, fake_rhs_expr)
+        self.visitchildren(node)
+        return node
+
+    def visit_TypeofNode(self, node):
+        # XXX: This will break code that calls typeof() before initialization
+        self.visit(node.operand)
         self.visitchildren(node)
         return node

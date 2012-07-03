@@ -27,6 +27,7 @@ cdef class ExitBlock(ControlBlock):
 cdef class NameAssignment:
     cdef public bint is_arg
     cdef public bint is_deletion
+    cdef public bint is_inplace
     cdef public object lhs
     cdef public object rhs
     cdef public object entry
@@ -55,7 +56,7 @@ cdef class ControlFlow:
      cpdef nextblock(self, parent=*)
      cpdef bint is_tracked(self, entry)
      cpdef mark_position(self, node)
-     cpdef mark_assignment(self, lhs, rhs, entry)
+     cpdef mark_assignment(self, lhs, rhs, entry, is_inplace=*)
      cpdef mark_argument(self, lhs, rhs, entry)
      cpdef mark_deletion(self, node, entry)
      cpdef mark_reference(self, node, entry)

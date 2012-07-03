@@ -3,6 +3,8 @@ import ExprNodes
 import Nodes
 import Builtin
 import PyrexTypes
+import Naming
+import FlowControl
 from Cython import Utils
 from PyrexTypes import py_object_type, unspecified_type
 from Visitor import CythonTransform, EnvTransform
@@ -332,6 +334,84 @@ class PyObjectTypeInferer(object):
             if entry.type is unspecified_type:
                 entry.type = py_object_type
 
+def group_entries(scope):
+    """
+    Group entries by disjoint assignments.
+    """
+    tosplit = {}
+
+    for name, entry in scope.entries.iteritems():
+        if entry.type is not unspecified_type:
+            continue
+        visited = set()
+        groups = []
+        inplace_groups = {}
+        for assmt in entry.cf_assignments:
+            if assmt.is_inplace or assmt.is_deletion:
+                group = set(assmt.lhs.cf_state)
+                group.add(assmt)
+                for src_assmt in group:
+                    if src_assmt in inplace_groups:
+                        inplace_groups[src_assmt].update(group)
+                    else:
+                        inplace_groups[src_assmt] = group
+        for assmt in entry.cf_assignments:
+            if assmt in visited:
+                continue
+            group = set()
+            tovisit = set([assmt])
+            if assmt in inplace_groups:
+                tovisit.update(inplace_groups[assmt])
+            while tovisit:
+                assmt = tovisit.pop()
+                if assmt in group:
+                    continue
+                group.add(assmt)
+                visited.add(assmt)
+                for ref in assmt.refs:
+                    tovisit.update(ref.node.cf_state)
+            groups.append(group)
+        if len(groups) > 1:
+            tosplit[entry] = groups
+    return tosplit
+
+def entry_split(scope, entry, groups, verbose=False):
+    scope.purge_entry(entry)
+    if verbose:
+        print 'entry:', entry
+    for no, group in enumerate(groups):
+        if verbose:
+            print '... group:', group
+        new_entry = scope.declare_var(
+            "%s.#%d" % (entry.name, no),
+            entry.type, entry.pos,
+            cname='%sg%d_%s' % (
+                Naming.vargroup_prefix, no, entry.name))
+        for assmt in group:
+            new_entry.cf_assignments.append(assmt)
+            assmt.entry = new_entry
+            assmt.lhs.entry = new_entry
+            for ref in assmt.refs:
+                ref.entry = new_entry
+                ref.node.entry = new_entry
+            if verbose:
+                print '... ...', assmt.pos
+        # Update CF flags
+        for assmt in group:
+            old_state = assmt.lhs.cf_state
+            new_state = FlowControl.ControlFlowState(
+                set(i for i in old_state
+                    if i.entry is assmt.entry))
+            # XXX: it's not correct, set cf_maybe_null to True
+            # XXX: to avoid problems
+            if not new_state:
+                new_state.cf_is_null = True
+            new_state.cf_maybe_null = True
+            assmt.lhs.cf_state = new_state
+            assmt.lhs.cf_is_null = new_state.cf_is_null
+            assmt.lhs.cf_maybe_null = new_state.cf_maybe_null
+
+
 class SimpleAssignmentTypeInferer(object):
     """
     Very basic type inference.
@@ -351,6 +431,13 @@ class SimpleAssignmentTypeInferer(object):
                 if entry.type is unspecified_type:
                     entry.type = py_object_type
             return
+
+        tosplit = group_entries(scope)
+        if tosplit:
+            if verbose:
+                print 'Gonna split entries:'
+            for entry, groups in tosplit.iteritems():
+                entry_split(scope, entry, groups, verbose=verbose)
 
         dependancies_by_entry = {} # entry -> dependancies
         entries_by_dependancy = {} # dependancy -> entries
