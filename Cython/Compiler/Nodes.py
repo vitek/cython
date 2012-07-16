@@ -6514,7 +6514,8 @@ class FromImportStatNode(StatNode):
                         env.use_utility_code(UtilityCode.load_cached("ExtTypeTest", "ObjectHandling.c"))
                         break
             else:
-                entry =  env.lookup(target.name)
+                entry = target.entry
+                assert entry is not None, "Oops, entry must be initialized here"
                 # check whether or not entry is already cimported
                 if (entry.is_type and entry.type.name == name
                         and hasattr(entry.type, 'module_name')):

@@ -392,9 +392,11 @@ def entry_split(scope, entry, groups, verbose=False):
             new_entry.cf_assignments.append(assmt)
             assmt.entry = new_entry
             assmt.lhs.entry = new_entry
+            #assmt.lhs.name = new_entry.name
             for ref in assmt.refs:
                 ref.entry = new_entry
                 ref.node.entry = new_entry
+                #ref.node.name = new_entry.name
             if verbose:
                 print '... ...', assmt.pos
         # Update CF flags
