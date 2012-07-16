@@ -341,7 +341,8 @@ def group_entries(scope):
     tosplit = {}
 
     for name, entry in scope.entries.iteritems():
-        if entry.type is not unspecified_type:
+        if (entry.type is not unspecified_type or
+            (entry.in_closure or entry.from_closure)):
             continue
         visited = set()
         groups = []
