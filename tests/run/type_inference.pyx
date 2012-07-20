@@ -1,4 +1,4 @@
-# cython: infer_types = True
+# cython: infer_types = True, infer_types.local = False
 
 
 cimport cython
@@ -151,7 +151,7 @@ def unary_operators():
     """
     cdef int x = 1
     assert typeof(~x) == "int", typeof(~x)
-    cdef some_class obj
+    cdef some_class obj = some_class()
     assert typeof(~obj) == "Python object", typeof(~obj)
     a = int(1)
     assert typeof(a) == "Python object", typeof(a)
@@ -437,10 +437,10 @@ def safe_only():
     >>> safe_only()
     """
     a = 1.0
+    c = MyType()
     assert typeof(a) == "double", typeof(c)
     b = 1;
     assert typeof(b) == "long", typeof(b)
-    c = MyType()
     assert typeof(c) == "MyType", typeof(c)
     for i in range(10): pass
     assert typeof(i) == "long", typeof(i)

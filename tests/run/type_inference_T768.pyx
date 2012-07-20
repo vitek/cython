@@ -7,15 +7,19 @@ def type_inference_del_int():
     >>> type_inference_del_int()
     'Python object'
     """
-    x = 1
-    del x
-    return typeof(x)
+    try:
+        x = 1
+        return typeof(x)
+    finally:
+        del x
 
 def type_inference_del_dict():
     """
     >>> type_inference_del_dict()
     'dict object'
     """
-    x = {}
-    del x
-    return typeof(x)
+    try:
+        x = {}
+        return typeof(x)
+    finally:
+        del x
