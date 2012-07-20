@@ -389,6 +389,7 @@ def entry_split(scope, entry, groups, verbose=False):
             cname='%sg%d_%s' % (
                 Naming.vargroup_prefix, no, entry.name))
         for assmt in group:
+            new_entry.pos = assmt.pos
             new_entry.cf_assignments.append(assmt)
             assmt.entry = new_entry
             assmt.lhs.entry = new_entry
@@ -407,8 +408,7 @@ def entry_split(scope, entry, groups, verbose=False):
                     if i.entry is assmt.entry))
             # XXX: it's not correct, set cf_maybe_null to True
             # XXX: to avoid problems
-            if not new_state:
-                new_state.cf_is_null = True
+            new_state.cf_is_null = False
             new_state.cf_maybe_null = True
             assmt.lhs.cf_state = new_state
             assmt.lhs.cf_is_null = new_state.cf_is_null
@@ -438,8 +438,6 @@ class SimpleAssignmentTypeInferer(object):
         if scope.directives['infer_types.local']:
             tosplit = group_entries(scope)
             if tosplit:
-                if verbose:
-                    print 'Gonna split entries:'
                 for entry, groups in tosplit.iteritems():
                     entry_split(scope, entry, groups, verbose=verbose)
 
