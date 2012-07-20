@@ -342,7 +342,7 @@ def group_entries(scope):
 
     for name, entry in scope.entries.iteritems():
         if (entry.type is not unspecified_type or
-            (entry.in_closure or entry.from_closure)):
+            entry.is_arg or (entry.in_closure or entry.from_closure)):
             continue
         visited = set()
         groups = []
