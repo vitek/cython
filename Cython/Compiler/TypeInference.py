@@ -435,12 +435,13 @@ class SimpleAssignmentTypeInferer(object):
                     entry.type = py_object_type
             return
 
-        tosplit = group_entries(scope)
-        if tosplit:
-            if verbose:
-                print 'Gonna split entries:'
-            for entry, groups in tosplit.iteritems():
-                entry_split(scope, entry, groups, verbose=verbose)
+        if scope.directives['infer_types.local']:
+            tosplit = group_entries(scope)
+            if tosplit:
+                if verbose:
+                    print 'Gonna split entries:'
+                for entry, groups in tosplit.iteritems():
+                    entry_split(scope, entry, groups, verbose=verbose)
 
         dependancies_by_entry = {} # entry -> dependancies
         entries_by_dependancy = {} # dependancy -> entries

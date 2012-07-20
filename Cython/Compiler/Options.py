@@ -91,6 +91,7 @@ directive_defaults = {
     'profile': False,
     'infer_types': None,
     'infer_types.verbose': False,
+    'infer_types.local': True,
     'autotestdict': True,
     'autotestdict.cdef': False,
     'autotestdict.all': False,
