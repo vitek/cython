@@ -974,6 +974,8 @@ class ControlFlowAnalysis(CythonTransform):
         if hasattr(node.target, 'entry'):
             self.reductions = set(reductions)
 
+            node.target.entry.local_ti_disable = True
+
             for private_node in node.assigned_nodes:
                 private_node.entry.error_on_uninitialized = True
                 pos, reduction = node.assignments[private_node.entry]

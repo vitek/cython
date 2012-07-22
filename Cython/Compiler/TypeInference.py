@@ -57,6 +57,7 @@ class MarkParallelAssignments(EnvTransform):
                 else:
                     pos = lhs.pos
 
+                lhs.entry.local_ti_disable = True
                 parallel_node.assignments[lhs.entry] = (pos, inplace_op)
                 parallel_node.assigned_nodes.append(lhs)
 
@@ -341,7 +342,7 @@ def group_entries(scope):
     tosplit = {}
 
     for name, entry in scope.entries.iteritems():
-        if (entry.type is not unspecified_type or
+        if (entry.type is not unspecified_type or entry.local_ti_disable or
             entry.is_arg or (entry.in_closure or entry.from_closure)):
             continue
         visited = set()
