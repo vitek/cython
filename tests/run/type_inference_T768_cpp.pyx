@@ -17,5 +17,7 @@ def type_inference_del_cpp():
     'Circle *'
     """
     x = new Circle(10)
-    del x
-    return typeof(x)
+    try:
+        return typeof(x)
+    finally:
+        del x
