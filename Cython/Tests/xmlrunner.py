@@ -153,6 +153,7 @@ class _XMLTestResult(_TextTestResult):
         if self.showAll:
             self.stream.write('  ' + self.getDescription(test))
             self.stream.write(" ... ")
+            self.stream.flush()
 
     def stopTest(self, test):
         "Called after execute each test method."
